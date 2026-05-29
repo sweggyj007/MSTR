@@ -1,0 +1,1717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MSTR Signal Engine v3</title>
+  <style>
+    :root {
+      --bg0:#ffffff; --bg1:#f7f6f3; --bd1:#e2e0da; --bd2:#ccc9c2;
+      --t0:#1a1a18; --t1:#5f5e5a; --t2:#8f8d89;
+      --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+      --mono:'JetBrains Mono','Fira Mono','Cascadia Code','Consolas',monospace;
+    }
+    /* Dark theme — activated by [data-theme="dark"] on <html> */
+    [data-theme="dark"] {
+      --bg0:#181715; --bg1:#201f1c; --bd1:#302e29; --bd2:#403e39;
+      --t0:#eeece7; --t1:#9e9c97; --t2:#686662;
+    }
+    [data-theme="dark"] .sig-long   { background:#0A2E1F!important; border-color:#22C97A!important; color:#4AE89A!important; }
+    [data-theme="dark"] .sig-hold   { background:#2E2008!important; border-color:#F5A623!important; color:#F5C842!important; }
+    [data-theme="dark"] .sig-reduce { background:#2E1008!important; border-color:#F06030!important; color:#F08060!important; }
+    [data-theme="dark"] .sig-redhi   { background:#3A0A00!important; border-color:#FF5520!important; color:#FF8060!important; }
+    [data-theme="dark"] .sig-short  { background:#2E0808!important; border-color:#FF4444!important; color:#FF8080!important; }
+    [data-theme="dark"] .sig-neut   { background:#222220!important; border-color:#888884!important; color:#BBBBAA!important; }
+    [data-theme="dark"] .sig-caut   { background:#16103A!important; border-color:#9B8FFF!important; color:#BDB5FF!important; }
+    [data-theme="dark"] .sig-btcov  { background:#2E2008!important; border-color:#F5A623!important; color:#F5C842!important; }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg0);color:var(--t0);font-family:var(--sans);min-height:100vh;}
+    #root{max-width:760px;margin:0 auto;padding:20px 14px 40px;}
+    input,select,button{font-family:inherit;outline:none;}
+    input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{opacity:.4;}
+  </style>
+</head>
+<body>
+<div id="root"><div style="padding:40px;text-align:center;font-family:monospace;color:#888;font-size:13px">Loading…</div></div>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script>
+window.storage={
+  get:async function(k){var v=localStorage.getItem('mstr__'+k);if(v===null)throw new Error('nf');return{key:k,value:v};},
+  set:async function(k,v){try{localStorage.setItem('mstr__'+k,v);return{key:k,value:v};}catch(e){return null;}},
+};
+</script>
+<script type="text/babel">
+const{useState,useEffect,useCallback,useRef}=React;
+const MSTR_CIK="1050446";
+
+// ── ATM Event Seed Data — verified from SEC 8-K filings ─────────────────────
+// NOTE: From Q1 2026, STRC preferred became the dominant ATM vehicle (~59% of proceeds)
+// Strategy files 8-Ks weekly; use "SEC EDGAR Auto-Sync" button to fetch new events
+const SEED_EVENTS=[
+  // ── 2024 ──────────────────────────────────────────────────────────────────
+  {id:1, date:"2024-11-10",type:"common",   shares:7854647,  proceeds:2030e6,   avgPrice:258.0},
+  // ── 2025 ──────────────────────────────────────────────────────────────────
+  {id:2, date:"2025-11-30",type:"common",   shares:8214000,  proceeds:1478.1e6, avgPrice:180.0},
+  // ── 2026 Jan–Feb ──────────────────────────────────────────────────────────
+  {id:3, date:"2026-01-19",type:"common",   shares:10399650, proceeds:1827.3e6, avgPrice:175.7},
+  {id:4, date:"2026-02-01",type:"common",   shares:673527,   proceeds:106.1e6,  avgPrice:157.5},
+  {id:5, date:"2026-02-22",type:"common",   shares:297940,   proceeds:39.7e6,   avgPrice:133.2},
+  // ── 2026 Mar — STRC becomes primary ATM vehicle ───────────────────────────
+  {id:6, date:"2026-03-02",type:"preferred",shares:3776205,  proceeds:377.1e6,  avgPrice:99.87}, // STRC Mar 2-8
+  {id:7, date:"2026-03-02",type:"common",   shares:6327541,  proceeds:197.3e6,  avgPrice:31.2},  // MSTR Mar 2-8 (est.)
+  {id:8, date:"2026-03-09",type:"preferred",shares:11818467, proceeds:1181.8e6, avgPrice:99.99}, // STRC Mar 9-15
+  {id:9, date:"2026-03-09",type:"common",   shares:2833668,  proceeds:394.6e6,  avgPrice:139.3}, // MSTR Mar 9-15
+  // ── 2026 Apr ──────────────────────────────────────────────────────────────
+  {id:10,date:"2026-04-05",type:"preferred",shares:3303227,  proceeds:330.3e6,  avgPrice:99.99}, // STRC Apr 6 8-K
+  {id:11,date:"2026-04-05",type:"common",   shares:1175844,  proceeds:144.0e6,  avgPrice:122.5}, // MSTR Apr 6 8-K
+  {id:12,date:"2026-04-12",type:"preferred",shares:10028363, proceeds:1001.3e6, avgPrice:99.85}, // STRC Apr 13 8-K
+  {id:13,date:"2026-04-19",type:"preferred",shares:21795389, proceeds:2176.3e6, avgPrice:99.85}, // STRC Apr 20 8-K
+  {id:14,date:"2026-04-19",type:"common",   shares:2165000,  proceeds:366.0e6,  avgPrice:169.0}, // MSTR Apr 20 8-K
+  {id:15,date:"2026-04-26",type:"common",   shares:1451601,  proceeds:255.0e6,  avgPrice:175.7}, // MSTR Apr 27 8-K
+  // ── 2026 May ──────────────────────────────────────────────────────────────
+  {id:16,date:"2026-03-16",type:"common",   shares:509111,   proceeds:76.5e6,   avgPrice:150.3}, // MSTR Mar 16-22 (8-K Mar 23)
+  {id:17,date:"2026-04-27",type:"common",   shares:492210,   proceeds:82.0e6,   avgPrice:166.6}, // 8-K May 4
+  {id:18,date:"2026-05-04",type:"common",   shares:231324,   proceeds:42.9e6,   avgPrice:185.5}, // 8-K May 11
+  {id:19,date:"2026-05-11",type:"preferred",shares:19519801, proceeds:1949.0e6, avgPrice:99.85}, // STRC 8-K May 18
+  {id:20,date:"2026-05-11",type:"common",   shares:430344,   proceeds:83.7e6,   avgPrice:194.5}, // MSTR 8-K May 18
+  // 8-K May 26: special capital structure update — $2.0B STRC + $84M MSTR (May 18-25 period)
+  // Note: BTC holdings unchanged at 843,738 (proceeds used for debt repurchase, not BTC)
+];
+
+// BTC holdings history — sourced from 8-K filings, extended back 90d for 30D trend
+const SEED_BTC_LOG=[
+  {ts:new Date("2025-11-30").getTime(), btcHeld:402100},
+  {ts:new Date("2025-12-15").getTime(), btcHeld:439000},
+  {ts:new Date("2026-01-13").getTime(), btcHeld:450000},
+  {ts:new Date("2026-01-21").getTime(), btcHeld:461000},
+  {ts:new Date("2026-02-02").getTime(), btcHeld:471107},
+  {ts:new Date("2026-02-10").getTime(), btcHeld:478740},
+  {ts:new Date("2026-02-24").getTime(), btcHeld:499226},
+  {ts:new Date("2026-03-10").getTime(), btcHeld:499226},
+  {ts:new Date("2026-03-17").getTime(), btcHeld:521776},
+  {ts:new Date("2026-03-23").getTime(), btcHeld:522776},
+  {ts:new Date("2026-03-31").getTime(), btcHeld:528185},
+  {ts:new Date("2026-04-06").getTime(), btcHeld:533057},
+  {ts:new Date("2026-04-14").getTime(), btcHeld:546984},
+  {ts:new Date("2026-04-20").getTime(), btcHeld:581149},
+  {ts:new Date("2026-04-21").getTime(), btcHeld:553555},
+  {ts:new Date("2026-04-27").getTime(), btcHeld:556828},
+  {ts:new Date("2026-03-02").getTime(), btcHeld:738731},
+  {ts:new Date("2026-03-09").getTime(), btcHeld:761068},
+  {ts:new Date("2026-03-16").getTime(), btcHeld:761068},  // no BTC purchase Mar 16-22
+  {ts:new Date("2026-04-05").getTime(), btcHeld:766970},
+  {ts:new Date("2026-04-12").getTime(), btcHeld:780897},
+  {ts:new Date("2026-04-19").getTime(), btcHeld:815061},
+  {ts:new Date("2026-04-28").getTime(), btcHeld:818334},
+  {ts:new Date("2026-05-10").getTime(), btcHeld:818869},  // 8-K May 11: 535 BTC purchased
+  {ts:new Date("2026-05-18").getTime(), btcHeld:843738},
+  {ts:new Date("2026-05-25").getTime(), btcHeld:843738},  // 8-K May 26: debt repurchase, no new BTC
+];
+
+const EARNINGS=[
+  {label:"Q1 2026 Earnings",date:"2026-04-29",confirmed:true},
+  {label:"Q2 2026 Earnings",date:"2026-07-29",confirmed:false},
+  {label:"Q3 2026 Earnings",date:"2026-10-28",confirmed:false},
+  {label:"Q4 2026 Earnings",date:"2027-02-10",confirmed:false},
+];
+const BLACKOUT_DAYS=14;
+
+const DEFAULTS={
+  btcHeld:843738, dilutedShares:382700000,  // as of May 25 8-K
+  undeployedProceeds:0, assumedBtcBuyPrice:0,
+  pendingFlag:false, atmEvents:SEED_EVENTS,
+  btcTrendOverride:"auto", mstrManualPrice:"", geminiKey:"",
+  mNavHistory:[], btcHeldUpdatedAt:null, dilSharesUpdatedAt:null,
+  positionEntryPrice:0, positionEntryBtcPrice:0, positionDate:"", positionSizeUsd:0,
+  softwareRevenueAnnual:477e6, strcManualPrice:0,
+  lastSyncedDate:"2026-05-18", autoSyncEnabled:true,
+  preferredOutstanding:0, preferredDividendRate:0.08,
+  // Supply params for ownership factor
+  circulatingBtc:20020000,
+  effectiveBtc:16500000,
+  exchangeBtc:3020000,
+  btcDailyIssuance:450,
+  btcHeldLog:SEED_BTC_LOG,
+};
+
+const sGet=async k=>{try{const r=await window.storage.get(k);return r?JSON.parse(r.value):null;}catch{return null;}};
+const sSet=async(k,v)=>{try{await window.storage.set(k,JSON.stringify(v));}catch{}};
+
+// ── Calendar ─────────────────────────────────────────────────────────────────
+const calSt=d=>{const now=Date.now(),e=new Date(d).getTime();return{daysTo:Math.ceil((e-now)/86400000),inBlackout:now>=e-BLACKOUT_DAYS*86400000&&now<e,isPast:now>=e};};
+const nextE=()=>EARNINGS.find(e=>new Date(e.date).getTime()>Date.now())||null;
+const inBlackoutNow=()=>EARNINGS.some(e=>calSt(e.date).inBlackout);
+
+// ── ATM regime ────────────────────────────────────────────────────────────────
+function getAtmRegime(events){
+  const cutoff=Date.now()-28*86400000;
+  const recent=(events||[]).filter(e=>e.type==="common"&&new Date(e.date).getTime()>=cutoff);
+  if(!recent.length)return{regime:"Dormant",weeksActive:0,total4w:0};
+  const weeks=new Set(recent.map(e=>{const d=new Date(e.date),day=d.getDay()||7,m=new Date(d);m.setDate(d.getDate()-day+1);return m.toISOString().slice(0,10);}));
+  const total4w=recent.reduce((s,e)=>s+e.proceeds,0),w=weeks.size;
+  return{regime:w>=3&&total4w/w>200e6?"Aggressive":w>=2?"Active":"Light",weeksActive:w,total4w};
+}
+
+// ── BTC trend ─────────────────────────────────────────────────────────────────
+function getBtcTrend(hist){
+  if(!hist||hist.length<3)return"insufficient";
+  const now=hist[hist.length-1].price;
+  const a5=hist.filter(h=>h.ts<Date.now()-5*86400000);
+  const a10=hist.filter(h=>h.ts<Date.now()-10*86400000);
+  const a20=hist.filter(h=>h.ts<Date.now()-20*86400000);
+  const r5 =a5.length ?(now-a5[a5.length-1].price)/a5[a5.length-1].price:null;
+  const r10=a10.length?(now-a10[a10.length-1].price)/a10[a10.length-1].price:null;
+  const r20=a20.length?(now-a20[a20.length-1].price)/a20[a20.length-1].price:null;
+  // Uptrend: at least one positive reading
+  if([r5,r20].filter(r=>r!==null).every(r=>r>0.01))return"uptrend";
+  // Downtrend: BOTH 5d AND 10d AND 20d (if available) must be negative — requires sustained decline
+  // Backtest finding: single-period check produced too many false NEUTRAL overrides
+  const downs=[r5,r10,r20].filter(r=>r!==null);
+  if(downs.length>=2&&downs.every(r=>r<-0.01))return"downtrend";
+  return"range";
+}
+
+// ── Ownership factor ──────────────────────────────────────────────────────────
+function getOwnershipMetrics({btcHeld,btcHeldLog,circulatingBtc,effectiveBtc,exchangeBtc,btcDailyIssuance}){
+  const MAX_SUPPLY=21000000;
+  const pctMax=btcHeld/MAX_SUPPLY;
+  const pctCirc=btcHeld/circulatingBtc;
+  const pctEff=btcHeld/effectiveBtc;
+  const pctExch=btcHeld/exchangeBtc;
+
+  // 30D delta from btcHeldLog
+  const cutoff30=Date.now()-30*86400000;
+  const old30=btcHeldLog&&btcHeldLog.filter(l=>l.ts<cutoff30);
+  const delta30=old30&&old30.length>0?btcHeld-old30[old30.length-1].btcHeld:null;
+  const monthlyIssuance=btcDailyIssuance*30;
+  const accum30xIssuance=delta30!=null&&delta30>0?delta30/monthlyIssuance:null;
+
+  // Latest purchase (diff between last two log entries)
+  const log=btcHeldLog&&[...btcHeldLog].sort((a,b)=>a.ts-b.ts);
+  let latestPurchase=null;
+  if(log&&log.length>=2){
+    const diff=btcHeld-(log[log.length-1].btcHeld);
+    if(diff>0)latestPurchase=diff;
+    else{
+      const diff2=log[log.length-1].btcHeld-log[log.length-2].btcHeld;
+      if(diff2>0)latestPurchase=diff2;
+    }
+  }
+  const latestPurchaseXDaily=latestPurchase?latestPurchase/btcDailyIssuance:null;
+
+  // Trend
+  const trend=delta30==null?"unknown":delta30>1000?"rising":delta30<-1000?"falling":"stalled";
+
+  // Absorption level from 30D
+  const absorptionLevel=accum30xIssuance==null?"unknown":accum30xIssuance>20?"extreme":accum30xIssuance>5?"high":accum30xIssuance>1?"moderate":"low";
+
+  return{pctMax,pctCirc,pctEff,pctExch,delta30,accum30xIssuance,latestPurchase,latestPurchaseXDaily,trend,absorptionLevel,monthlyIssuance};
+}
+
+function getOwnershipContext({ownershipMetrics,accrRatio,regime,mNav}){
+  const{trend,accum30xIssuance,absorptionLevel}=ownershipMetrics;
+  const isAccretive=accrRatio!=null&&accrRatio>=1.05;
+  const isAggressive=["Aggressive","Active"].includes(regime);
+  const isOvervalued=mNav!=null&&mNav>1.10;
+
+  let signal="neutral",label="→ Neutral",color="#686662",bg="#F3F2EE";
+  if(trend==="rising"&&isAccretive&&!isOvervalued){
+    signal="bullish";label="↑ Bullish — all four factors aligned";color="#085041";bg="#E1F5EE";
+  } else if(trend==="rising"&&(!isAccretive||isAggressive)){
+    signal="btc_over_mstr";label="⇄ Prefer BTC over MSTR";color="#633806";bg="#FAEEDA";
+  } else if(trend==="falling"){
+    signal="risk_off";label="↓ Risk-off — holdings declining";color="#791F1F";bg="#FCEBEB";
+  } else if(trend==="stalled"&&!isOvervalued){
+    signal="neutral";label="→ Ownership stalled";color="#686662";bg="#F3F2EE";
+  }
+  return{signal,label,color,bg,absorptionLevel};
+}
+
+// ── STRC analytics ───────────────────────────────────────────────────────────
+function getStrcMetrics({strcPrice, preferredOutstanding, preferredDividendRate,
+                          softwareRevenueAnnual, atmEvents, mstrPrice, effMstr}){
+  const PAR=100;
+  // 1. Discount/premium to par
+  const discount = strcPrice!=null ? (strcPrice-PAR)/PAR : null;
+  const parStatus = strcPrice==null ? "unknown"
+    : strcPrice<95 ? "critical" : strcPrice<97 ? "warning" : strcPrice<99 ? "watch" : "stable";
+
+  // 2. Dividend coverage ratio
+  //    Annual dividend cost / (software revenue + trailing 90d ATM proceeds annualised)
+  const annualDividend = preferredOutstanding>0&&preferredDividendRate>0
+    ? preferredOutstanding*preferredDividendRate : 0;
+  const cutoff90 = Date.now()-90*86400000;
+  const atm90 = (atmEvents||[]).filter(e=>new Date(e.date).getTime()>cutoff90)
+    .reduce((s,e)=>s+e.proceeds,0);
+  const annualisedAtm = atm90*(365/90);
+  const totalFunding = (softwareRevenueAnnual||0)+annualisedAtm;
+  const coverageRatio = annualDividend>0&&totalFunding>0 ? totalFunding/annualDividend : null;
+  const coverageStatus = coverageRatio==null ? "unknown"
+    : coverageRatio<1 ? "critical" : coverageRatio<2 ? "warning"
+    : coverageRatio<5 ? "adequate" : "strong";
+
+  // 3. STRC/MSTR relative signal
+  //    STRC holding par while MSTR drops = capital fleeing to preferred = early warning
+  //    We approximate by comparing STRC discount trend to mNAV direction
+  //    Flag when STRC < 99 (showing stress) while mNAV > 1.05 (MSTR still premium)
+  const flywheelStress = strcPrice!=null&&effMstr!=null
+    && strcPrice<99&&discount<-0.01;
+
+  return{discount,parStatus,annualDividend,coverageRatio,coverageStatus,
+         flywheelStress,annualisedAtm,totalFunding};
+}
+
+// ── BTC/share trend ──────────────────────────────────────────────────────────
+function getBtcPerShareTrend(btcHeldLog, dilutedShares){
+  if(!btcHeldLog||btcHeldLog.length<2||!dilutedShares)return{trend:"unknown",points:[],delta30:null,pct30:null};
+  const sorted=[...btcHeldLog].sort((a,b)=>a.ts-b.ts);
+  const points=sorted.map(l=>({ts:l.ts,bps:l.btcHeld/dilutedShares}));
+  const now=points[points.length-1].bps;
+  const old30=points.filter(p=>p.ts<Date.now()-30*86400000);
+  if(!old30.length)return{trend:"unknown",points,delta30:null,pct30:null};
+  const base=old30[old30.length-1].bps;
+  const delta30=now-base;
+  const pct30=(now-base)/base;
+  const trend=pct30>0.005?"rising":pct30<-0.005?"falling":"flat";
+  return{trend,points,delta30,pct30};
+}
+
+// ── Market absorption ratio ───────────────────────────────────────────────────
+function getAbsorptionRatio(atmEvents, mstrVol){
+  // Latest common ATM event shares vs 20-day avg volume
+  if(!mstrVol||mstrVol<=0)return{ratio:null,label:"unknown",color:"#666",bg:"#F3F2EE"};
+  const recent30=[...atmEvents].filter(e=>e.type==="common"&&new Date(e.date).getTime()>Date.now()-30*86400000);
+  if(!recent30.length)return{ratio:null,label:"no recent ATM",color:"#666",bg:"#F3F2EE"};
+  // Total shares sold in last 30 days ÷ 20 trading days avg volume
+  const totalShares=recent30.reduce((s,e)=>s+e.shares,0);
+  const tradingDays=22; // ~22 trading days / month
+  const dailyAtm=totalShares/tradingDays;
+  const ratio=dailyAtm/mstrVol;
+  let label,color,bg;
+  if(ratio<0.03){label="low — market can absorb";color="#085041";bg="#E1F5EE";}
+  else if(ratio<0.08){label="moderate — watch carefully";color="#633806";bg="#FAEEDA";}
+  else if(ratio<0.15){label="high — supply pressure";color="#4A1B0C";bg="#FAECE7";}
+  else{label="critical — ATM likely depressing price";color="#791F1F";bg="#FCEBEB";}
+  return{ratio,dailyAtm,label,color,bg};
+}
+
+// ── mNAV velocity + sparkline ────────────────────────────────────────────────
+function getMNavVelocity(mNavHistory){
+  if(!mNavHistory||mNavHistory.length<2)return{velocity:null,direction:"unknown",sparkPoints:[]};
+  const sorted=[...mNavHistory].sort((a,b)=>a.ts-b.ts).slice(-14); // last 14 entries
+  const sparkPoints=sorted.map(p=>p.v);
+  const now=sorted[sorted.length-1].v;
+  const week=sorted.filter(p=>p.ts<Date.now()-7*86400000);
+  if(!week.length)return{velocity:null,direction:"unknown",sparkPoints};
+  const base=week[week.length-1].v;
+  const velocity=now-base;
+  const direction=velocity>0.02?"rising":velocity<-0.02?"falling":"stable";
+  return{velocity,direction,sparkPoints};
+}
+
+// ── Signal logger for forward testing ────────────────────────────────────────
+function logSignalChange(prevKey, newKey, context){
+  if(prevKey===newKey)return;
+  try{
+    const log=JSON.parse(localStorage.getItem("mstr__signal-log")||"[]");
+    log.push({ts:Date.now(),from:prevKey,to:newKey,mNav:context.mNav,regime:context.regime,trend:context.trend});
+    localStorage.setItem("mstr__signal-log", JSON.stringify(log.slice(-100)));
+  }catch{}
+}
+
+// ── Main signal (4-factor) ────────────────────────────────────────────────────
+const SIG={
+  LONG:  {label:"LONG MSTR",              key:"LONG",  color:"#0F6E56",bg:"#E1F5EE",border:"#1D9E75"},
+  HOLD:  {label:"HOLD / MONITOR",          key:"HOLD",  color:"#854F0B",bg:"#FAEEDA",border:"#EF9F27"},
+  REDHI: {label:"REDUCE — HIGH CONVICTION",key:"REDHI", color:"#7A1F05",bg:"#FAE0DA",border:"#C93B15"},
+  REDUCE:{label:"REDUCE / HEDGE",          key:"REDUCE",color:"#993C1D",bg:"#FAECE7",border:"#D85A30"},
+  SHORT: {label:"SHORT MSTR / LONG BTC",  key:"SHORT", color:"#791F1F",bg:"#FCEBEB",border:"#E24B4A"},
+  NEUT:  {label:"NEUTRAL / AVOID",      key:"NEUT",  color:"#444441",bg:"#F1EFE8",border:"#B4B2A9"},
+  CAUT:  {label:"CAUTION",              key:"CAUT",  color:"#3C3489",bg:"#EEEDFE",border:"#7F77DD"},
+  BTCOV: {label:"LONG BTC / REDUCE MSTR",key:"BTCOV",color:"#633806",bg:"#FAEEDA",border:"#EF9F27"},
+};
+
+function getSignal({mNav,regime,trend,blackout,ownershipCtx,absorptionCtx,btcPerShareTrend,strcMetrics}){
+  // Factor 3: BTC regime
+  if(trend==="downtrend")return{...SIG.NEUT,reason:"BTC in downtrend — avoid MSTR regardless of mNAV or ATM regime",blackout,ownershipCtx};
+  // Pending
+  if(regime==="Pending")return{...SIG.CAUT,reason:"ATM proceeds not yet deployed — reported metrics understated. Do not trade.",blackout,ownershipCtx};
+
+  // Factor 1+2: Valuation + issuance → base signal
+  let base;
+  if(mNav<1.00&&["Dormant","Light"].includes(regime))     base={...SIG.LONG,  reason:`${((1-mNav)*100).toFixed(1)}% discount to NAV · ATM ${regime.toLowerCase()} · favorable entry`};
+  else if(mNav<1.00&&regime==="Active")                   base={...SIG.HOLD,  reason:"Discount to NAV but ATM supply active — upside capped. Wait for Dormant."};
+  else if(mNav<1.10)                                      base={...SIG.HOLD,  reason:["Active","Aggressive"].includes(regime)?"At fair value with active ATM — premium ceiling forming. Do not chase.":"Near fair value, ATM manageable — hold if BTC trend constructive."};
+  else if(mNav<1.20){
+    // Split reduce by conviction: Active/Aggressive = higher conviction reduce
+    if(["Active","Aggressive"].includes(regime)){
+      base={...SIG.REDHI,reason:`mNAV ${mNav.toFixed(2)}× + ${regime} ATM — premium + active supply pressure. High conviction reduce.`};
+    } else {
+      base={...SIG.REDUCE,reason:`mNAV ${mNav.toFixed(2)}× · ATM ${regime.toLowerCase()} · company likely selling into this premium.`};
+    }
+  }
+  // Extreme mNAV override: >2.0× is indefensible at any regime — always SHORT
+  // Backtest finding: V2 Dormant/Light cap over-corrected; at 7-8× NAV, no regime justifies holding
+  else if(mNav>=2.0)  base={...SIG.SHORT,reason:`mNAV ${mNav.toFixed(2)}× — extreme premium, indefensible at any ATM regime. Systematic SHORT regardless of issuance state.`};
+  // Dormant/Light + mNAV 1.20–2.0: cap at REDUCE (premium can still expand with no supply pressure)
+  else if(["Dormant","Light"].includes(regime))  base={...SIG.REDUCE,reason:`mNAV ${mNav.toFixed(2)}× + ${regime} regime — ATM supply low, premium may expand further. Reduce exposure, do not short.`};
+  // Active + mNAV 1.20–1.40: reduce but not short yet
+  else if(mNav<1.40&&regime==="Active")  base={...SIG.REDUCE,reason:`mNAV ${mNav.toFixed(2)}× + Active ATM — elevated but not extreme. Reduce exposure, watch for Aggressive shift.`};
+  // SHORT: Aggressive regime OR mNAV > 1.40 (any regime except Dormant/Light already handled above)
+  else  base={...SIG.SHORT,reason:`mNAV ${mNav.toFixed(2)}× + ${regime} ATM — systematic seller above fair value. Equal-dollar pair. (beta is regime-dependent)`};
+
+  // Factor 4: Ownership modifier
+  if(ownershipCtx){
+    if(ownershipCtx.signal==="btc_over_mstr"&&["LONG","HOLD"].includes(base.key)){
+      // Ownership rising but dilutive — downgrade to BTC over MSTR
+      return{...SIG.BTCOV,cls:"sig-btcov",reason:"Ownership expanding but BTC/share accretion weak — equity supply pressure dominates. Hold BTC; reduce MSTR exposure.",blackout,ownershipCtx};
+    }
+    if(ownershipCtx.signal==="bullish"&&base.key==="LONG"){
+      // All four factors aligned — reinforce
+      base={...base,reason:base.reason+" · Ownership factor confirms: rising BTC% + accretive ATM."};
+    }
+    if(ownershipCtx.signal==="risk_off"){
+      return{...SIG.REDUCE,reason:"MSTR BTC holdings declining — forced-sale or capital deployment halt risk. Reduce exposure.",blackout,ownershipCtx};
+    }
+  }
+
+  // BTC uptrend modifier on REDUCE: strong rally can push MSTR higher even with elevated mNAV
+  // Backtest finding: 3 of 12 REDUCE failures were BTC-momentum driven rallies
+  // Logic: if BTC is in confirmed uptrend, downgrade REDUCE/REDHI to HOLD — wait for momentum to fade
+  if(trend==="uptrend"&&["REDUCE","REDHI"].includes(base.key)&&mNav<1.60){
+    return{...SIG.HOLD,reason:`mNAV ${mNav.toFixed(2)}× warrants reducing, but BTC in confirmed uptrend — premium may expand further. Hold; reduce when BTC momentum fades or regime turns Aggressive.`,blackout,ownershipCtx,absorptionCtx,btcPerShareTrend,strcMetrics};
+  }
+
+  // Absorption modifier
+  if(absorptionCtx&&absorptionCtx.ratio!=null&&absorptionCtx.ratio>=0.15&&["LONG","HOLD"].includes(base.key)){
+    return{...SIG.HOLD,reason:"ATM supply critical — daily issuance is "+Math.round(absorptionCtx.ratio*100)+"% of avg volume. Market absorbing under pressure. Do not chase.",blackout,ownershipCtx,absorptionCtx,btcPerShareTrend,strcMetrics};
+  }
+  // BTC/share trend modifier
+  if(btcPerShareTrend&&btcPerShareTrend.trend==="falling"&&base.key==="LONG"){
+    return{...SIG.HOLD,reason:"BTC/share declining despite purchases — dilution outpacing accumulation. Wait for BTC/share trend to reverse.",blackout,ownershipCtx,absorptionCtx,btcPerShareTrend,strcMetrics};
+  }
+  // STRC modifier — preferred stock flywheel stress signals
+  if(strcMetrics){
+    // STRC critical (<95): downgrade LONG → HOLD, flag HOLD/REDUCE
+    if(strcMetrics.parStatus==="critical"&&base.key==="LONG"){
+      return{...SIG.HOLD,reason:`STRC trading at $${strcMetrics.discount!=null?(100+strcMetrics.discount*100).toFixed(2):"??"} — critical discount to $100 par. Preferred flywheel impaired. Do not initiate new MSTR long.`,blackout,ownershipCtx,absorptionCtx,btcPerShareTrend,strcMetrics};
+    }
+    // Coverage ratio critical (<1): dividend cost exceeds all funding sources
+    if(strcMetrics.coverageStatus==="critical"&&["LONG","HOLD"].includes(base.key)){
+      return{...SIG.HOLD,reason:`Dividend coverage critical — annual preferred cost ${(strcMetrics.annualDividend/1e9).toFixed(1)}B exceeds estimated funding sources. Flywheel sustainability at risk.`,blackout,ownershipCtx,absorptionCtx,btcPerShareTrend,strcMetrics};
+    }
+    // Flywheel stress: STRC discount forming while mNAV still elevated
+    if(strcMetrics.flywheelStress&&base.key==="LONG"){
+      return{...SIG.HOLD,reason:"STRC showing discount to par while MSTR trades at premium — capital rotating from common to preferred. Monitor for flywheel deceleration.",blackout,ownershipCtx,absorptionCtx,btcPerShareTrend,strcMetrics};
+    }
+  }
+  return{...base,blackout,ownershipCtx,absorptionCtx,btcPerShareTrend,strcMetrics};
+}
+
+// ── 8-K parsing ───────────────────────────────────────────────────────────────
+// Parse 8-K filing — extracts ALL security types (STRC/STRF/STRK/STRD/MSTR) + BTC holdings
+function parseEightK(text){
+  const c=text.replace(/<[^>]+>/g," ").replace(/&[a-z]+;/g," ").replace(/\s+/g," ");
+
+  // BTC holdings (total as-of)
+  const btcHeldM=c.match(/(?:held|holds?|total of|aggregate of)\s+(?:approximately\s+)?([\d,]+)\s+bitcoin/i);
+  const btcHeld=btcHeldM?parseInt(btcHeldM[1].replace(/,/g,"")) : null;
+
+  // BTC purchased in period
+  const btcBoughtM=c.match(/(?:acquired|purchased?)\s+(?:an aggregate of\s+)?(?:approximately\s+)?([\d,]+)\s+bitcoin/i);
+  const btcPurchased=btcBoughtM?parseInt(btcBoughtM[1].replace(/,/g,"")) : null;
+
+  // Parse each security's ATM activity
+  const securities=[];
+  const secPatterns=[
+    {key:"STRC", type:"preferred", label:"STRC"},
+    {key:"STRF", type:"preferred", label:"STRF"},
+    {key:"STRK", type:"preferred", label:"STRK"},
+    {key:"STRD", type:"preferred", label:"STRD"},
+    {key:"MSTR", type:"common",    label:"MSTR"},
+  ];
+
+  for(const sec of secPatterns){
+    // Match shares sold for this security
+    // Pattern: "STRC Stock ... 19,519,801 ... $1,952.0 ... $1,949.0"
+    const shareRe=new RegExp(sec.key+"\\s+Stock[\\s\\S]{0,200}?([\\d,]{4,})\\s+\\$?([\\d,]+\\.?\\d*)\\s+\\$?([\\d,]+\\.?\\d*)","i");
+    const m=c.match(shareRe);
+    if(m){
+      const shares=parseInt(m[1].replace(/,/g,""));
+      const notional=parseFloat(m[2].replace(/,/g,""))*1e6;
+      const netProc=parseFloat(m[3].replace(/,/g,""))*1e6;
+      if(shares>100&&netProc>0){
+        securities.push({type:sec.type,label:sec.label,shares,proceeds:netProc,avgPrice:netProc/shares});
+      }
+    }
+  }
+
+  // Fallback: if regex above fails, use simple extraction for MSTR common
+  if(!securities.length){
+    const sM=c.match(/sold\s+(?:an aggregate of\s+)?(?:approximately\s+)?([\d,]+)\s+shares/i);
+    const pM=c.match(/aggregate\s+(?:net\s+)?proceeds\s+of\s+(?:approximately\s+)?\$\s*([\d,.]+)\s*(billion|million)/i);
+    if(sM&&pM){
+      const shares=parseInt(sM[1].replace(/,/g,""));
+      const n=parseFloat(pM[1].replace(/,/g,""));
+      const proceeds=pM[2].toLowerCase()==="billion"?n*1e9:n*1e6;
+      securities.push({type:"common",label:"MSTR",shares,proceeds,avgPrice:proceeds/shares});
+    }
+  }
+
+  // Extra: narrative format (e.g. "Issued an additional $2.0 billion notional of STRC and $84 million of Class A common stock")
+  if(!securities.length){
+    // STRC narrative: "$X billion/million notional of... STRC"
+    const strcNarr=c.match(/\$([\d.]+)\s*(billion|million)\s*notional\s*of[\s\S]{0,80}?STRC/i);
+    if(strcNarr){
+      const n=parseFloat(strcNarr[1]);
+      const proceeds=strcNarr[2].toLowerCase()==="billion"?n*1e9:n*1e6;
+      const approxShares=Math.round(proceeds/99.85);
+      securities.push({type:"preferred",label:"STRC",shares:approxShares,proceeds,avgPrice:99.85});
+    }
+    // MSTR common narrative: "$X million of Class A common stock"
+    const mstrNarr=c.match(/\$([\d.]+)\s*(billion|million)\s*of\s+(?:its\s+)?Class\s+A\s+common/i);
+    if(mstrNarr){
+      const n=parseFloat(mstrNarr[1]);
+      const proceeds=mstrNarr[2].toLowerCase()==="billion"?n*1e9:n*1e6;
+      // Estimate shares from a reference MSTR price (narrative doesn't give share count)
+      const refPrice=180; // approximate — user can correct in the ATM log
+      securities.push({type:"common",label:"MSTR",shares:Math.round(proceeds/refPrice),proceeds,avgPrice:refPrice,estimated:true});
+    }
+  }
+
+  return{btcHeld,btcPurchased,securities};
+}
+
+// Fetch all 8-Ks since a given date, return structured events
+async function fetchNewFilings(sinceDate){
+  const P1=u=>"https://corsproxy.io/?"+encodeURIComponent(u);
+  const P2=u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u);
+  const fetchAny=async(url,json=false)=>{
+    for(const fn of[()=>fetch(url),()=>fetch(P1(url)),()=>fetch(P2(url))]){
+      try{const r=await fn();if(r.ok)return json?await r.json():await r.text();}catch{}
+    }
+    throw new Error("all proxies failed: "+url);
+  };
+
+  // Step 1: get submissions index
+  const idx=await fetchAny(`https://data.sec.gov/submissions/CIK${MSTR_CIK.padStart(10,"0")}.json`,true);
+  const f=idx.filings.recent;
+
+  // Step 2: find all 8-Ks newer than sinceDate
+  const since=new Date(sinceDate).getTime();
+  const newFilings=[];
+  for(let i=0;i<f.form.length;i++){
+    if(f.form[i]==="8-K"&&new Date(f.filingDate[i]).getTime()>since){
+      newFilings.push({filed:f.filingDate[i],acc:f.accessionNumber[i].replace(/-/g,""),doc:f.primaryDocument[i]});
+    }
+  }
+  if(!newFilings.length)return{events:[],btcUpdates:[],count:0};
+
+  // Step 3: fetch and parse each filing
+  const events=[], btcUpdates=[];
+  for(const filing of newFilings){
+    try{
+      const url=`https://www.sec.gov/Archives/edgar/data/${MSTR_CIK}/${filing.acc}/${filing.doc}`;
+      const html=await fetchAny(url,false);
+      const parsed=parseEightK(html);
+
+      // Extract ATM events
+      for(const sec of (parsed.securities||[])){
+        if(sec.shares>1000&&sec.proceeds>100000){
+          events.push({
+            id:Date.now()+Math.random(),
+            date:filing.filed,
+            type:sec.type,
+            shares:sec.shares,
+            proceeds:sec.proceeds,
+            avgPrice:sec.avgPrice,
+            source:`8-K ${filing.filed}`,
+          });
+        }
+      }
+
+      // Extract BTC holdings update
+      if(parsed.btcHeld&&parsed.btcHeld>500000){
+        btcUpdates.push({date:filing.filed,btcHeld:parsed.btcHeld,btcPurchased:parsed.btcPurchased});
+      }
+    }catch(e){
+      console.warn(`Failed to parse 8-K ${filing.filed}:`,e.message);
+    }
+  }
+
+  return{events,btcUpdates,count:newFilings.length};
+}
+async function geminiParse(text,key){
+  const prompt=`Extract from SEC 8-K. Return ONLY JSON:\n{"btcHeld":<number|null>,"btcPurchased":<number|null>,"sharesSold":<number|null>,"proceedsUsd":<dollars|null>}\n\n${text.slice(0,18000)}`;
+  const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:200}})});
+  if(!res.ok)throw new Error("Gemini "+res.status);
+  const d=await res.json();
+  const raw=d.candidates?.[0]?.content?.parts?.[0]?.text||"";
+  const m=raw.match(/\{[\s\S]*\}/);
+  if(!m)throw new Error("no JSON");
+  const p=JSON.parse(m[0]);
+  if(p.sharesSold&&p.proceedsUsd&&!p.avgPrice)p.avgPrice=p.proceedsUsd/p.sharesSold;
+  return p;
+}
+async function fetchLatest8K(){
+  const P1=u=>"https://corsproxy.io/?"+encodeURIComponent(u);
+  const P2=u=>"https://api.allorigins.win/raw?url="+encodeURIComponent(u);
+  const P3=u=>"https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(u);
+  const fetchAny=async(url,json=false)=>{
+    for(const fn of[()=>fetch(url),()=>fetch(P1(url)),()=>fetch(P2(url)),()=>fetch(P3(url))]){
+      try{const r=await fn();if(r.ok)return json?await r.json():await r.text();}catch{}
+    }
+    throw new Error("all proxies failed: "+url);
+  };
+
+  // Step 1: get filing index from submissions API (works via proxy)
+  const idxUrl=`https://data.sec.gov/submissions/CIK${MSTR_CIK.padStart(10,"0")}.json`;
+  const data=await fetchAny(idxUrl,true);
+  const f=data.filings.recent,i=f.form.findIndex(x=>x==="8-K");
+  if(i<0)throw new Error("no 8-K found");
+  const accRaw=f.accessionNumber[i],acc=accRaw.replace(/-/g,""),filed=f.filingDate[i];
+  const docUrl=`https://www.sec.gov/Archives/edgar/data/${MSTR_CIK}/${acc}/${f.primaryDocument[i]}`;
+
+  // Step 2a: try EDGAR full-text search API (returns JSON snippets, no file download needed)
+  // This is the most CORS-friendly path
+  try{
+    const searchUrl=`https://efts.sec.gov/LATEST/search-index?q=%22bitcoin%22&forms=8-K&dateRange=custom&startdt=${filed}&enddt=${filed}&entity=MicroStrategy+Incorporated`;
+    const sd=await fetchAny(searchUrl,true);
+    const hits=sd?.hits?.hits||[];
+    if(hits.length>0){
+      // Concatenate all highlighted snippets into a pseudo-document
+      const snippets=hits.flatMap(h=>Object.values(h?.highlight||{})).flat().join(" ");
+      if(snippets.length>200)return{html:snippets,filed,url:docUrl,source:"efts"};
+    }
+  }catch{}
+
+  // Step 2b: try fetching the filing viewer JSON (structured, easier than raw HTML)
+  try{
+    const viewerUrl=`https://www.sec.gov/Archives/edgar/data/${MSTR_CIK}/${acc}/${accRaw}-index.json`;
+    const vd=await fetchAny(viewerUrl,true);
+    // Get list of documents, prefer .htm exhibit
+    const docs=vd?.documents||[];
+    const exhibit=docs.find(d=>d.type==="EX-99.1")||docs.find(d=>d.type==="8-K")||docs[0];
+    if(exhibit){
+      const exUrl=`https://www.sec.gov/Archives/edgar/data/${MSTR_CIK}/${acc}/${exhibit.filename}`;
+      const html=await fetchAny(exUrl,false);
+      return{html,filed,url:docUrl};
+    }
+  }catch{}
+
+  // Step 2c: direct document fetch (works on localhost, may fail on file://)
+  try{
+    const html=await fetchAny(docUrl,false);
+    return{html,filed,url:docUrl};
+  }catch{}
+
+  throw new Error("could not fetch 8-K document. Try opening via localhost (python -m http.server 8080)");
+}
+
+// ── Formatters ────────────────────────────────────────────────────────────────
+const f2=n=>n!=null&&!isNaN(n)?Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}):"—";
+const f5=n=>n!=null&&!isNaN(n)?Number(n).toFixed(5):"—";
+const fB=n=>!n?"—":n>=1e9?`$${(n/1e9).toFixed(2)}B`:`$${(n/1e6).toFixed(1)}M`;
+const fPct=(n,d=2)=>n!=null?`${(n*100).toFixed(d)}%`:"—";
+const fK=n=>n!=null?Number(n).toLocaleString("en-US"):"—";
+const fX=n=>n!=null?`${n.toFixed(1)}×`:"—";
+
+// ── App ───────────────────────────────────────────────────────────────────────
+function App(){
+  const[ready,setReady]=useState(false);
+  const[darkMode,setDarkMode]=useState(()=>{
+    try{return localStorage.getItem('mstr__theme')==='dark';}catch{return false;}
+  });
+  useEffect(()=>{
+    document.documentElement.setAttribute('data-theme', darkMode?'dark':'light');
+    try{localStorage.setItem('mstr__theme', darkMode?'dark':'light');}catch{}
+  },[darkMode]);
+  const[settings,rawSet]=useState(DEFAULTS);
+  const[btcHist,setBtcHist]=useState([]);
+  const[btcPrice,setBtcPrice]=useState(null);
+  const[mstrPrice,setMstrPrice]=useState(null);
+  const[mstrStatus,setMstrStatus]=useState("pending");
+  const[btcStatus,setBtcStatus]=useState("pending");
+  const[loadPhase,setLoadPhase]=useState("init"); // init | fetching | ready | failed
+  const[lastRefresh,setLastRefresh]=useState(null);
+  const[showConfig,setShowConfig]=useState(false);
+  const[showInputs,setShowInputs]=useState(false);
+  const[showLog,setShowLog]=useState(false);
+  const[showAdd,setShowAdd]=useState(false);
+  const[showCal,setShowCal]=useState(false);
+  const[showSync,setShowSync]=useState(false);
+  const[showTrader,setShowTrader]=useState(false);
+  const[showOwnership,setShowOwnership]=useState(false);
+  const[syncStatus,setSyncStatus]=useState("");
+  const[syncResult,setSyncResult]=useState(null);
+  const[syncFiled,setSyncFiled]=useState(null);
+  const[syncUrl,setSyncUrl]=useState(null);
+  const[mstrVol,setMstrVol]=useState(null);
+  const[strcPrice,setStrcPrice]=useState(null);
+  const[strcStatus,setStrcStatus]=useState("pending");
+  const[autoSyncBadge,setAutoSyncBadge]=useState(0);
+  const[newEv,setNewEv]=useState({date:new Date().toISOString().slice(0,10),type:"common",shares:"",proceeds:"",avgPrice:""});
+  const saveTimer=useRef(null);
+
+  const setSettings=useCallback(patch=>{
+    rawSet(prev=>{
+      const next=typeof patch==="function"?patch(prev):{...prev,...patch};
+      // Staleness tracking
+      if(next.btcHeld!==prev.btcHeld&&next.btcHeld>0) next.btcHeldUpdatedAt=Date.now();
+      if(next.dilutedShares!==prev.dilutedShares&&next.dilutedShares>0) next.dilSharesUpdatedAt=Date.now();
+      // Auto-log btcHeld changes for 30D delta tracking
+      if(next.btcHeld!==prev.btcHeld&&next.btcHeld>0){
+        const newLog=[...(prev.btcHeldLog||[]),{ts:Date.now(),btcHeld:prev.btcHeld}].slice(-60);
+        next.btcHeldLog=newLog;
+      }
+      clearTimeout(saveTimer.current);
+      saveTimer.current=setTimeout(()=>sSet("mstr-v1-settings",next),400);
+      return next;
+    });
+  },[]);
+
+  // Request browser notification permission once
+  useEffect(()=>{ try{ if(typeof Notification!=="undefined"&&Notification.permission==="default") Notification.requestPermission(); }catch(e){} },[]);
+
+  useEffect(()=>{(async()=>{
+    const[s,h]=await Promise.all([sGet("mstr-v1-settings"),sGet("mstr-v1-btcHist")]);
+    if(s){
+      const merged={...DEFAULTS,...s};
+
+      // Fix btcHeldLog: merge seed if no deep history
+      const cutoff35=Date.now()-35*86400000;
+      const hasDeepHistory=(s.btcHeldLog||[]).some(l=>l.ts<cutoff35);
+      if(!hasDeepHistory){
+        const combined=[...SEED_BTC_LOG,...(s.btcHeldLog||[])];
+        const seen=new Set();
+        merged.btcHeldLog=combined
+          .sort((a,b)=>a.ts-b.ts)
+          .filter(l=>{const bucket=Math.floor(l.ts/3600000);if(seen.has(bucket))return false;seen.add(bucket);return true;});
+      }
+
+      // Fix atmEvents: if stored events are missing STRC preferred events, merge with seed
+      // Detection: seed has preferred type; old data only has common
+      const storedEvents=s.atmEvents||[];
+      const hasPreferred=storedEvents.some(e=>e.type==="preferred");
+      const hasSeedCount=storedEvents.length>=SEED_EVENTS.length;
+      if(!hasPreferred||!hasSeedCount){
+        // Merge seed + stored, deduplicate by date+type+shares(rounded to nearest 100)
+        const combined=[...SEED_EVENTS,...storedEvents];
+        const seen=new Set();
+        merged.atmEvents=combined
+          .sort((a,b)=>new Date(b.date)-new Date(a.date))
+          .filter(e=>{
+            const key=e.date+"_"+e.type+"_"+Math.round((e.shares||0)/100);
+            if(seen.has(key))return false;
+            seen.add(key);
+            return true;
+          });
+      }
+
+      rawSet(merged);
+    }
+    if(h)setBtcHist(h);
+    setReady(true);
+  })();},[]);
+
+  // ── Evaluate load outcome: ready when we have at least BTC price, failed if all attempts exhausted
+  useEffect(()=>{
+    if(!ready)return;
+    if(btcPrice!=null||mstrPrice!=null){ setLoadPhase("ready"); return; }
+    // If both still null 12s after ready, mark as failed
+    const t=setTimeout(()=>{
+      if(btcPrice==null&&mstrPrice==null) setLoadPhase("failed");
+    },12000);
+    return()=>clearTimeout(t);
+  },[ready,btcPrice,mstrPrice]);
+
+  // ── Price fetching ──────────────────────────────────────────────────────────
+  const fetchBtc=useCallback(async()=>{
+    setBtcStatus("fetching");
+    try{
+      const r=await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
+      const d=await r.json();const p=d?.bitcoin?.usd;
+      if(p){setBtcPrice(p);setBtcStatus("live");setBtcHist(prev=>{const u=[...prev,{ts:Date.now(),price:p}].slice(-600);sSet("mstr-v1-btcHist",u);return u;});}
+    }catch{setBtcStatus("error");}
+  },[]);
+
+  const fetchMstr=useCallback(async(manual)=>{
+    if(manual){const p=parseFloat(manual);if(!isNaN(p)&&p>0){setMstrPrice(p);setMstrStatus("manual");}return;}
+    const tryYF=async url=>{
+      const r=await fetch(url,{headers:{"Accept":"application/json"}});if(!r.ok)throw 0;
+      const d=await r.json(),meta=d?.chart?.result?.[0]?.meta;if(!meta)throw 0;
+      const st=meta.marketState;
+      const p=st==="POST"&&meta.postMarketPrice?meta.postMarketPrice:st==="PRE"&&meta.preMarketPrice?meta.preMarketPrice:meta.regularMarketPrice;
+      if(!p||p<10||p>5000)throw 0;
+      const vol=meta.regularMarketVolume||null;
+      return{p,vol,label:st==="POST"?"yahoo post-mkt":st==="PRE"?"yahoo pre-mkt":"yahoo live"};
+    };
+    const YF="https://query1.finance.yahoo.com/v8/finance/chart/MSTR?interval=1m&range=1d";
+    setMstrStatus("fetching");
+    try{const{p,vol,label}=await tryYF(YF);setMstrPrice(p);if(vol)setMstrVol(vol);setMstrStatus(label);sSet("mstr-v1-lastPrice",p);return;}catch{}
+    try{const{p,vol,label}=await tryYF("https://corsproxy.io/?"+encodeURIComponent(YF));setMstrPrice(p);if(vol)setMstrVol(vol);setMstrStatus(label+" (proxy)");sSet("mstr-v1-lastPrice",p);return;}catch{}
+    try{const{p,vol,label}=await tryYF("https://api.allorigins.win/raw?url="+encodeURIComponent(YF));setMstrPrice(p);if(vol)setMstrVol(vol);setMstrStatus(label+" (proxy2)");sSet("mstr-v1-lastPrice",p);return;}catch{}
+    try{
+      const r=await fetch("https://stooq.com/q/l/?s=mstr.us&f=sd2t2ohlcv&h&e=csv");
+      const csv=await r.text(),cols=csv.trim().split("\n")[1]?.split(",");
+      const p=cols?parseFloat(cols[6]):null;
+      if(p&&p>10&&p<5000){setMstrPrice(p);setMstrStatus("stooq close");sSet("mstr-v1-lastPrice",p);return;}
+    }catch{}
+    try{
+      setMstrStatus("searching");
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,tools:[{type:"web_search_20250305",name:"web_search"}],system:"Return ONLY valid JSON.",messages:[{role:"user",content:'Current MSTR stock price. Return ONLY: {"price":<number>}'}]})});
+      const data=await res.json(),text=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      const jm=text.match(/"price"\s*:\s*([\d]+\.?[\d]*)/);const p=jm?parseFloat(jm[1]):null;
+      if(p&&p>10&&p<5000){setMstrPrice(p);setMstrStatus("claude live");sSet("mstr-v1-lastPrice",p);return;}
+    }catch{}
+    const last=await sGet("mstr-v1-lastPrice");
+    if(last){setMstrPrice(last);setMstrStatus("cached");}else setMstrStatus("no price — use ⚙ override");
+  },[]);
+
+  const fetchStrc=useCallback(async(manual)=>{
+    if(manual&&manual>0){setStrcPrice(manual);setStrcStatus("manual");return;}
+    const tryYF=async url=>{
+      const r=await fetch(url,{headers:{"Accept":"application/json"}});if(!r.ok)throw 0;
+      const d=await r.json(),meta=d?.chart?.result?.[0]?.meta;if(!meta)throw 0;
+      const p=meta.regularMarketPrice||meta.postMarketPrice||meta.preMarketPrice;
+      if(!p||p<50||p>200)throw 0;
+      return p;
+    };
+    const YF="https://query1.finance.yahoo.com/v8/finance/chart/STRC?interval=1m&range=1d";
+    setStrcStatus("fetching");
+    try{const p=await tryYF(YF);setStrcPrice(p);setStrcStatus("live");sSet("mstr-v1-strcPrice",p);return;}catch{}
+    try{const p=await tryYF("https://corsproxy.io/?"+encodeURIComponent(YF));setStrcPrice(p);setStrcStatus("proxy");sSet("mstr-v1-strcPrice",p);return;}catch{}
+    try{const p=await tryYF("https://api.allorigins.win/raw?url="+encodeURIComponent(YF));setStrcPrice(p);setStrcStatus("proxy2");sSet("mstr-v1-strcPrice",p);return;}catch{}
+    const last=await sGet("mstr-v1-strcPrice");
+    if(last){setStrcPrice(last);setStrcStatus("cached");}else setStrcStatus("no data — set manual");
+  },[]);
+
+  const refresh=useCallback(async()=>{
+    setLoadPhase("fetching");
+    await Promise.all([fetchBtc(),fetchMstr(settings.mstrManualPrice),fetchStrc(settings.strcManualPrice)]);
+    setLastRefresh(new Date());
+  },[fetchBtc,fetchMstr,fetchStrc,settings.mstrManualPrice,settings.strcManualPrice]);
+
+  useEffect(()=>{if(ready)refresh();},[ready]);
+  useEffect(()=>{const t=setInterval(()=>{fetchBtc();fetchMstr(settings.mstrManualPrice);fetchStrc(settings.strcManualPrice);setLastRefresh(new Date());},2*60*1000);return()=>clearInterval(t);},[fetchBtc,fetchMstr,fetchStrc,settings.mstrManualPrice,settings.strcManualPrice]);
+
+  // ── SEC sync ────────────────────────────────────────────────────────────────
+  const runSync=useCallback(async(mode="new")=>{
+    setSyncStatus(mode==="new"
+      ?`fetching new 8-Ks since ${settings.lastSyncedDate}…`
+      :"fetching latest 8-K…");
+    setSyncResult(null);
+    try{
+      if(mode==="new"){
+        // Fetch ALL new 8-Ks since last sync date
+        const{events,btcUpdates,count}=await fetchNewFilings(settings.lastSyncedDate);
+        if(!count){setSyncStatus("✓ up to date — no new 8-Ks since last sync");return;}
+        if(events.length===0&&btcUpdates.length===0){
+          setSyncStatus(`✓ found ${count} new 8-K${count>1?"s":""}, but no parseable ATM events or BTC changes (may be a debt/capital-structure filing). lastSyncedDate advanced to today.`);
+          setSyncResult({mode:"multi",events:[],btcUpdates:[],count});
+          return;
+        }
+        setSyncStatus(`✓ found ${count} new 8-K${count>1?"s":""} → ${events.length} ATM event${events.length!==1?"s":""}${btcUpdates.length?" + "+btcUpdates.length+" BTC update":""}. Review below.`);
+        setSyncResult({mode:"multi",events,btcUpdates,count});
+      } else {
+        // Legacy: single latest 8-K
+        const{html,filed,url}=await fetchLatest8K();
+        setSyncStatus("parsing…");
+        const parsed=parseEightK(html);
+        setSyncFiled(filed);setSyncUrl(url);
+        setSyncResult({mode:"single",events:parsed.securities||[],btcUpdates:parsed.btcHeld?[{date:filed,btcHeld:parsed.btcHeld,btcPurchased:parsed.btcPurchased}]:[],raw:parsed});
+        setSyncStatus(parsed.securities?.length||parsed.btcHeld?"✓ parsed — review and confirm":"⚠ limited data extracted");
+      }
+    }catch(e){setSyncStatus("✗ "+e.message);}
+  },[settings.lastSyncedDate,settings.geminiKey]);
+
+  const applySync=useCallback(()=>{
+    if(!syncResult)return;
+    setSettings(prev=>{
+      const next={...prev};
+      const res=syncResult;
+
+      // Apply BTC updates (use most recent)
+      if(res.btcUpdates&&res.btcUpdates.length>0){
+        const latest=res.btcUpdates.sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+        if(latest.btcHeld>prev.btcHeld){
+          next.btcHeld=latest.btcHeld;
+          next.btcHeldUpdatedAt=Date.now();
+        }
+      }
+
+      // Apply ATM events — dedup by (date+type+shares) AND by (type+proceeds within 30 days)
+      // The second check catches capital-structure 8-Ks that re-report already-logged transactions
+      if(res.events&&res.events.length>0){
+        const existing=new Set(prev.atmEvents.map(e=>e.date+"_"+e.type+"_"+Math.round(e.shares/1000)));
+        const toAdd=res.events.filter(e=>{
+          const key=e.date+"_"+e.type+"_"+Math.round(e.shares/1000);
+          if(existing.has(key))return false;
+          // Proceeds-based dedup: same type + proceeds within 2% + within 30 days = likely re-report
+          const eTime=new Date(e.date).getTime();
+          const dupByProceeds=prev.atmEvents.some(x=>
+            x.type===e.type &&
+            Math.abs(x.proceeds-e.proceeds)/Math.max(e.proceeds,1)<0.02 &&
+            Math.abs(new Date(x.date).getTime()-eTime)<30*86400000
+          );
+          return!dupByProceeds;
+        });
+        if(toAdd.length>0){
+          next.atmEvents=[...prev.atmEvents,...toAdd].sort((a,b)=>new Date(b.date)-new Date(a.date));
+        }
+      }
+
+      // Update lastSyncedDate to today
+      next.lastSyncedDate=new Date().toISOString().slice(0,10);
+      return next;
+    });
+    setSyncResult(null);
+    setSyncStatus("✓ applied — "+new Date().toISOString().slice(0,10));
+  },[syncResult,setSettings]);
+
+  // Auto-check for new filings on load (once per day)
+  useEffect(()=>{
+    if(!ready||!settings.autoSyncEnabled)return;
+    let lastCheck=0;
+    try{lastCheck=parseInt(localStorage.getItem("mstr__lastAutoCheck")||"0");}catch(e){}
+    const oneDayMs=86400000;
+    if(Date.now()-lastCheck<oneDayMs)return;
+    try{localStorage.setItem("mstr__lastAutoCheck",Date.now().toString());}catch(e){}
+    // Silent background check — just update the badge
+    (async()=>{
+      try{
+        const idx=await fetch("https://corsproxy.io/?"+encodeURIComponent(`https://data.sec.gov/submissions/CIK${MSTR_CIK.padStart(10,"0")}.json`));
+        if(!idx.ok)return;
+        const data=await idx.json();
+        const f=data.filings.recent;
+        const since=new Date(settings.lastSyncedDate).getTime();
+        const newCount=f.form.filter((fm,i)=>fm==="8-K"&&new Date(f.filingDate[i]).getTime()>since).length;
+        if(newCount>0)setAutoSyncBadge(newCount);
+      }catch{}
+    })();
+  },[ready]);
+
+  // ── Derived metrics ─────────────────────────────────────────────────────────
+  const{btcHeld,dilutedShares,undeployedProceeds,assumedBtcBuyPrice,pendingFlag,atmEvents,btcTrendOverride,mstrManualPrice,geminiKey,circulatingBtc,effectiveBtc,exchangeBtc,btcDailyIssuance,btcHeldLog,preferredOutstanding,preferredDividendRate,positionEntryPrice,positionEntryBtcPrice,positionDate,positionSizeUsd,softwareRevenueAnnual,strcManualPrice,lastSyncedDate,autoSyncEnabled}=settings;
+  const annualPreferredCost=preferredOutstanding>0&&preferredDividendRate>0?preferredOutstanding*preferredDividendRate:0;
+
+  const effMstr=mstrManualPrice?parseFloat(mstrManualPrice):mstrPrice;
+  const btcP=btcPrice||0;
+  const btcNavTot=btcHeld*btcP,btcPerSh=dilutedShares>0?btcHeld/dilutedShares:0,navPerSh=btcPerSh*btcP;
+  const mktCap=(effMstr||0)*dilutedShares,dilMNav=btcNavTot>0&&effMstr?mktCap/btcNavTot:null,accrRatio=navPerSh>0&&effMstr?effMstr/navPerSh:null;
+  const buyPx=assumedBtcBuyPrice>0?assumedBtcBuyPrice:btcP;
+  const pfBtcHeld=btcHeld+(undeployedProceeds>0&&buyPx>0?undeployedProceeds/buyPx:0);
+  const pfBtcPerSh=dilutedShares>0?pfBtcHeld/dilutedShares:0,pfNavPerSh=pfBtcPerSh*btcP;
+  const pfMNav=pfBtcHeld*btcP>0&&effMstr?mktCap/(pfBtcHeld*btcP):null;
+
+  const{regime:rawRegime,weeksActive,total4w}=getAtmRegime(atmEvents);
+  const regime=pendingFlag?"Pending":rawRegime;
+  const autoTrend=getBtcTrend(btcHist),trend=btcTrendOverride!=="auto"?btcTrendOverride:autoTrend;
+  const blackout=inBlackoutNow(),ne=nextE();
+
+  // Track mNAV history for velocity/sparkline (auto-log every refresh)
+  const mNavHistoryRef=useRef(settings.mNavHistory||[]);
+  useEffect(()=>{
+    if(dilMNav==null)return;
+    const hist=settings.mNavHistory||[];
+    const last=hist[hist.length-1];
+    // Only store if value changed meaningfully or >30min since last
+    if(!last||Math.abs(last.v-dilMNav)>0.005||Date.now()-last.ts>30*60*1000){
+      const next=[...hist,{ts:Date.now(),v:dilMNav}].slice(-100);
+      setSettings(prev=>({...prev,mNavHistory:next}));
+    }
+  },[dilMNav]);
+
+  // Track signal changes + record start timestamp
+  const prevSigKeyRef=useRef(null);
+  useEffect(()=>{
+    if(!sig)return;
+    logSignalChange(prevSigKeyRef.current, sig.key, {mNav:dilMNav,regime,trend});
+    if(prevSigKeyRef.current!==sig.key){
+      setSettings(prev=>({...prev,sigStartTs:Date.now()}));
+      // Browser notification
+      try{
+        if(prevSigKeyRef.current&&typeof Notification!=="undefined"&&Notification.permission==="granted"){
+          new Notification("MSTR Signal Changed",{body:`${prevSigKeyRef.current} → ${sig.key} | mNAV ${dilMNav?.toFixed(2)}× | ${regime}`,icon:""});
+        }
+      }catch(e){}
+    }
+    prevSigKeyRef.current=sig.key;
+  },[sig?.key]);
+
+  const ownershipMetrics=getOwnershipMetrics({btcHeld,btcHeldLog,circulatingBtc,effectiveBtc,exchangeBtc,btcDailyIssuance});
+  const ownershipCtx=getOwnershipContext({ownershipMetrics,accrRatio,regime,mNav:dilMNav});
+  const absorptionCtx=getAbsorptionRatio(atmEvents,mstrVol);
+  const btcPerShareTrend=getBtcPerShareTrend(btcHeldLog,dilutedShares);
+  const effStrc=strcManualPrice>0?strcManualPrice:strcPrice;
+  const strcMetrics=getStrcMetrics({strcPrice:effStrc,preferredOutstanding,preferredDividendRate,softwareRevenueAnnual,atmEvents,mstrPrice,effMstr});
+  const sig=dilMNav!=null?getSignal({mNav:dilMNav,regime,trend,blackout,ownershipCtx,absorptionCtx,btcPerShareTrend,strcMetrics}):null;
+
+  // mNAV velocity
+  const{velocity:mNavVel,direction:mNavDir,sparkPoints}=getMNavVelocity(settings.mNavHistory||[]);
+
+  // Data staleness (days since btcHeld/dilShares last manually updated)
+  const btcHeldStaleDays=settings.btcHeldUpdatedAt?Math.floor((Date.now()-settings.btcHeldUpdatedAt)/86400000):null;
+  const dilSharesStaleDays=settings.dilSharesUpdatedAt?Math.floor((Date.now()-settings.dilSharesUpdatedAt)/86400000):null;
+
+  // Signal duration (days current signal has been active)
+  const sigStartTs=settings.sigStartTs||Date.now();
+  const sigDurationDays=Math.floor((Date.now()-sigStartTs)/86400000);
+
+  const sortedCommon=[...atmEvents].filter(e=>e.type==="common").sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const latestCommon=sortedCommon[0],daysSince=latestCommon?Math.floor((Date.now()-new Date(latestCommon.date))/86400000):null;
+  const lastEvAccr=latestCommon&&navPerSh>0?latestCommon.avgPrice/navPerSh:null;
+
+  // ── Styles ──────────────────────────────────────────────────────────────────
+  const mono=`'JetBrains Mono','Fira Mono','Consolas',monospace`;
+  const CARD={background:"var(--bg1)",border:"1px solid var(--bd1)",borderRadius:10,padding:"12px 14px"};
+  const LBL={fontSize:11,fontWeight:600,letterSpacing:"0.11em",textTransform:"uppercase",color:"var(--t2)",marginBottom:4,fontFamily:mono};
+  const VAL={fontSize:26,fontWeight:500,fontFamily:mono,color:"var(--t0)",lineHeight:1.15};
+  const SUB={fontSize:13,color:"var(--t1)",marginTop:3,fontFamily:mono};
+  const BTN={fontSize:12,padding:"5px 10px",borderRadius:6,border:"1px solid var(--bd2)",background:"var(--bg0)",color:"var(--t1)",cursor:"pointer",fontFamily:mono};
+  const INP={fontSize:13,padding:"6px 10px",borderRadius:6,border:"1px solid var(--bd2)",background:"var(--bg0)",color:"var(--t0)",fontFamily:mono,boxSizing:"border-box",width:"100%"};
+  const GBTN={...BTN,background:"#1D9E75",color:"#fff",border:"none",padding:"6px 14px"};
+  const REGIME_C={Dormant:["#E1F5EE","#1D9E75","#085041"],Light:["#E6F1FB","#378ADD","#0C447C"],Active:["#FAEEDA","#EF9F27","#633806"],Aggressive:["#FAECE7","#D85A30","#4A1B0C"],Pending:["#EEEDFE","#7F77DD","#26215C"]};
+  const TREND_C={uptrend:["#E1F5EE","#085041","↑ uptrend"],range:["#FAEEDA","#633806","→ range"],downtrend:["#FAECE7","#4A1B0C","↓ downtrend"],insufficient:["#F3F2EE","#666","? accumulating"]};
+  const rC=REGIME_C[regime]||REGIME_C.Dormant,tC=TREND_C[trend]||TREND_C.insufficient;
+  const pill=(bg,tx,border="transparent",sm=false)=>({background:bg,color:tx,border:`1px solid ${border}`,borderRadius:4,padding:sm?"2px 7px":"3px 9px",fontSize:sm?9:11,fontWeight:500,display:"inline-block",fontFamily:mono,letterSpacing:"0.04em"});
+  const sdot=s=>({live:"#1D9E75","yahoo live":"#1D9E75","yahoo post-mkt":"#1D9E75","yahoo pre-mkt":"#1D9E75","yahoo live (proxy)":"#1D9E75","yahoo post-mkt (proxy)":"#1D9E75","yahoo pre-mkt (proxy)":"#1D9E75","yahoo live (proxy2)":"#1D9E75","stooq close":"#1D9E75","claude live":"#1D9E75",manual:"#378ADD",cached:"#888",fetching:"#EF9F27",searching:"#7F77DD",pending:"#aaa",error:"#E24B4A"}[s]||"#aaa");
+
+  const absorptionColor={low:"#085041",moderate:"#633806",high:"#4A1B0C",extreme:"#791F1F",unknown:"#666"}[ownershipMetrics.absorptionLevel]||"#666";
+  const absorptionBg={low:"#E1F5EE",moderate:"#FAEEDA",high:"#FAECE7",extreme:"#FCEBEB",unknown:"#F3F2EE"}[ownershipMetrics.absorptionLevel]||"#F3F2EE";
+
+  const addEvent=()=>{
+    if(!newEv.date||!newEv.shares||!newEv.proceeds)return;
+    const proceeds=parseFloat(newEv.proceeds)*1e6,shares=parseInt(newEv.shares),avgPrice=parseFloat(newEv.avgPrice)||proceeds/shares;
+    setSettings(prev=>({...prev,atmEvents:[...prev.atmEvents,{id:Date.now(),date:newEv.date,type:newEv.type,shares,proceeds,avgPrice}].sort((a,b)=>new Date(b.date)-new Date(a.date))}));
+    setNewEv({date:new Date().toISOString().slice(0,10),type:"common",shares:"",proceeds:"",avgPrice:""});setShowAdd(false);
+  };
+
+  if(!ready||loadPhase==="init"||loadPhase==="fetching"){
+    return(
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"60vh",fontFamily:mono,gap:14}}>
+        <div style={{fontSize:48,fontWeight:700,color:"var(--t0)",animation:"mstrBlink 1.4s ease-in-out infinite"}}>^_^</div>
+        <div style={{fontSize:13,color:"var(--t2)",letterSpacing:"0.05em"}}>loading market data…</div>
+        <div style={{display:"flex",gap:5,marginTop:4}}>
+          {[0,1,2].map(i=><span key={i} style={{width:7,height:7,borderRadius:"50%",background:"var(--t1)",animation:`mstrBounce 1.2s ease-in-out ${i*0.16}s infinite`}}/>)}
+        </div>
+        <style>{`
+          @keyframes mstrBlink{0%,100%{opacity:1}50%{opacity:.45}}
+          @keyframes mstrBounce{0%,80%,100%{transform:translateY(0);opacity:.4}40%{transform:translateY(-7px);opacity:1}}
+        `}</style>
+      </div>
+    );
+  }
+  if(loadPhase==="failed"){
+    return(
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"60vh",fontFamily:mono,gap:14,padding:24}}>
+        <div style={{fontSize:48,fontWeight:700,color:"#E24B4A"}}>X_X</div>
+        <div style={{fontSize:14,color:"var(--t0)",fontWeight:600}}>couldn't load market data</div>
+        <div style={{fontSize:12,color:"var(--t2)",textAlign:"center",maxWidth:340,lineHeight:1.6}}>
+          Price feeds didn't respond — this is usually a temporary network or proxy issue. Your network may also be blocking the data sources.
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:6}}>
+          <button onClick={()=>{setLoadPhase("fetching");refresh();}} style={{...GBTN,fontSize:13}}>↻ retry</button>
+          <button onClick={()=>setLoadPhase("ready")} style={{...BTN,fontSize:13}}>open anyway →</button>
+        </div>
+        <div style={{fontSize:11,color:"var(--t2)",marginTop:4}}>you can enter prices manually in ⚙ once inside</div>
+      </div>
+    );
+  }
+
+  return(
+    <div style={{fontFamily:"var(--sans)"}}>
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,paddingBottom:10,borderBottom:"1px solid var(--bd1)"}}>
+        <div style={{display:"flex",alignItems:"baseline",gap:10}}>
+          <span style={{fontSize:13,fontWeight:600,fontFamily:mono,color:"var(--t0)",letterSpacing:"0.06em"}}>MSTR SIGNAL ENGINE</span>
+          <span style={{fontSize:11,fontFamily:mono,color:"var(--t2)",letterSpacing:"0.04em"}}>v3 · 5-FACTOR</span>
+          <span style={{fontSize:12,fontFamily:mono,color:"var(--t2)"}}>{lastRefresh?lastRefresh.toLocaleTimeString():"—"} · auto 2min</span>
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <span style={{fontSize:12,fontFamily:mono,color:"var(--t2)",display:"flex",alignItems:"center",gap:5}}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:sdot(btcStatus),display:"inline-block"}}/>BTC
+            <span style={{width:6,height:6,borderRadius:"50%",background:sdot(mstrStatus),display:"inline-block",marginLeft:4}}/>MSTR
+          </span>
+          <button style={BTN} onClick={refresh}>↻ refresh</button>
+              <button style={{...BTN,fontSize:14,padding:"4px 9px"}} onClick={()=>setDarkMode(v=>!v)} title="Toggle light/dark">{darkMode?"☀":"🌙"}</button>
+          <button style={{...BTN,background:showConfig?"var(--t0)":undefined,color:showConfig?"var(--bg0)":undefined}} onClick={()=>setShowConfig(v=>!v)}>⚙</button>
+        </div>
+      </div>
+
+      {/* ── Config ─────────────────────────────────────────────────────────── */}
+      {showConfig&&(
+        <div style={{...CARD,marginBottom:10}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div>
+              <div style={LBL}>MSTR price override</div>
+              <div style={{fontSize:10,color:"var(--t2)",marginBottom:5,fontFamily:mono}}>blank = live fetch via Yahoo/proxy</div>
+              <div style={{display:"flex",gap:6}}>
+                <input style={INP} type="number" step="0.01" placeholder="e.g. 177.00" value={mstrManualPrice} onChange={e=>setSettings({mstrManualPrice:e.target.value})}/>
+                {mstrManualPrice&&<button style={BTN} onClick={()=>setSettings({mstrManualPrice:""})}>clear</button>}
+              </div>
+            </div>
+            <div>
+              <div style={LBL}>Gemini API key (optional)</div>
+              <div style={{fontSize:10,color:"var(--t2)",marginBottom:5,fontFamily:mono,lineHeight:1.5}}>Free at aistudio.google.com<br/>Used only if 8-K rule-parsing fails</div>
+              <input style={INP} type="password" placeholder="AIza…" value={geminiKey} onChange={e=>setSettings({geminiKey:e.target.value})}/>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SIGNAL (4-factor) ───────────────────────────────────────────────── */}
+      {sig?(
+        <div className={sig.cls||""} style={{background:sig.bg,border:`2px solid ${sig.border}`,borderRadius:12,padding:"18px 22px",marginBottom:10}}>
+          <div style={{fontSize:9,fontFamily:mono,color:sig.color,opacity:.7,letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:5}}>trade signal · 4-factor</div>
+          <div style={{fontSize:34,fontWeight:600,fontFamily:mono,color:sig.color,letterSpacing:"0.02em",marginBottom:7,lineHeight:1}}>{sig.label}</div>
+          <div style={{fontSize:12,color:sig.color,opacity:.85,lineHeight:1.65,fontFamily:mono,marginBottom:10}}>{sig.reason}</div>
+          {/* 4-factor status row */}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+            {[
+              {l:"Valuation",v:dilMNav!=null?(dilMNav<1?"✓ discount":dilMNav<1.1?"~ fair":dilMNav<1.4?"✗ elevated":dilMNav<2.0?"✗ high":"✗ extreme"):"—",ok:dilMNav!=null&&dilMNav<1.1},
+              {l:"Issuance / ATM",v:["Dormant","Light"].includes(regime)?"✓ "+regime:"✗ "+regime,ok:["Dormant","Light"].includes(regime)},
+              {l:"BTC Regime",v:trend==="uptrend"?"✓ uptrend":trend==="range"?"~ range":"✗ downtrend",ok:trend!=="downtrend"&&trend!=="insufficient"},
+              {l:"Ownership",v:ownershipCtx.signal==="bullish"?"✓ rising + accretive":ownershipCtx.signal==="btc_over_mstr"?"⇄ dilutive":ownershipCtx.signal==="risk_off"?"✗ declining":"~ neutral",ok:ownershipCtx.signal==="bullish"},
+              {l:"Absorption",v:absorptionCtx.ratio==null?"~ no data":absorptionCtx.ratio<0.03?"✓ low":absorptionCtx.ratio<0.08?"~ moderate":absorptionCtx.ratio<0.15?"⚠ high":"✗ critical",ok:absorptionCtx.ratio==null||absorptionCtx.ratio<0.08},
+              {l:"BTC/Share",v:btcPerShareTrend.trend==="rising"?"✓ rising":btcPerShareTrend.trend==="falling"?"✗ falling":btcPerShareTrend.trend==="flat"?"~ flat":"~ no history",ok:btcPerShareTrend.trend==="rising"},
+              {l:"STRC Flywheel",v:strcMetrics.parStatus==="stable"?"✓ stable":strcMetrics.parStatus==="watch"?"~ watch":strcMetrics.parStatus==="warning"?"⚠ warning":strcMetrics.parStatus==="critical"?"✗ critical":"~ no data",ok:strcMetrics.parStatus==="stable"||strcMetrics.parStatus==="unknown"},
+            ].map(({l,v,ok})=>(
+              <div key={l} style={{background:"rgba(0,0,0,0.06)",borderRadius:4,padding:"3px 8px",fontSize:12,fontFamily:mono,color:sig.color,opacity:ok?1:0.65}}>
+                <span style={{opacity:.6}}>{l}: </span>{v}
+              </div>
+            ))}
+          </div>
+          {(btcHeldStaleDays!=null&&btcHeldStaleDays>10)||(dilSharesStaleDays!=null&&dilSharesStaleDays>10)?
+            <div style={{background:"#2E1A00",border:"1px solid #F5A623",borderRadius:6,padding:"5px 10px",fontSize:12,color:"#F5C842",marginBottom:8,fontFamily:mono}}>
+              ⚠ Manual data may be stale — {[btcHeldStaleDays>10?`BTC held: ${btcHeldStaleDays}d`:"",dilSharesStaleDays>10?`shares: ${dilSharesStaleDays}d`:""].filter(Boolean).join(" · ")} · check SEC EDGAR
+            </div>:null}
+          {sig.blackout&&<div style={{background:"#FFF8E6",border:"1px solid #F0C040",borderRadius:6,padding:"6px 10px",fontSize:10,color:"#7A5500",marginBottom:6,fontFamily:mono,lineHeight:1.6}}>⚠ Earnings blackout — ATM likely paused. Dormant regime reading may not reflect true intent.</div>}
+          {undeployedProceeds>0&&<div style={{background:"#EEEDFE",border:"1px solid #AFA9EC",borderRadius:6,padding:"6px 10px",fontSize:10,color:"#3C3489",fontFamily:mono,lineHeight:1.6}}>⚠ {fB(undeployedProceeds)} undeployed — reported metrics understated. See pro-forma below.</div>}
+        </div>
+      ):(
+        <div style={{...CARD,textAlign:"center",padding:28,marginBottom:10}}>
+          <div style={{color:"var(--t2)",fontSize:12,fontFamily:mono}}>{mstrStatus==="searching"?"⧗ fetching MSTR via web search…":"signal requires MSTR + BTC prices"}</div>
+          <div style={{color:"var(--t2)",fontSize:11,fontFamily:mono,marginTop:4}}>enter override in ⚙ for immediate signal</div>
+        </div>
+      )}
+
+      {/* ── Three pillars ───────────────────────────────────────────────────── */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+        <div style={CARD}>
+          <div style={LBL}>diluted mNAV</div>
+          <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+            <div style={{...VAL,color:dilMNav!=null?(dilMNav<1?"#0F6E56":dilMNav>1.15?"#791F1F":"var(--t0)"):"var(--t0)"}}>{dilMNav!=null?`${f2(dilMNav)}×`:"—"}</div>
+            {mNavDir!=="unknown"&&<span style={{fontSize:12,fontFamily:mono,color:mNavDir==="rising"?"#1D9E75":mNavDir==="falling"?"#E24B4A":"var(--t2)",fontWeight:600}}>
+              {mNavDir==="rising"?"↑":mNavDir==="falling"?"↓":"→"}{mNavVel!=null?` ${mNavVel>=0?"+":""}${mNavVel.toFixed(3)}`:""}
+            </span>}
+          </div>
+          <div style={SUB}>{dilMNav!=null&&(dilMNav<1?`${fPct(1-dilMNav)} discount`:`${fPct(dilMNav-1)} premium`)} <span style={{opacity:.6,fontSize:11}}>· {sigDurationDays}d signal</span></div>
+          {sparkPoints.length>1&&(()=>{
+            const W=160,H=36,pad=3;
+            const min=Math.min(...sparkPoints),max=Math.max(...sparkPoints),rng=max-min||0.001;
+            const pts=sparkPoints.map((v,i)=>[
+              pad+(i/(sparkPoints.length-1))*(W-pad*2),
+              pad+(1-((v-min)/rng))*(H-pad*2)
+            ]);
+            const linePts=pts.map(([x,y])=>`${x},${y}`).join(" ");
+            const areaPts=`${pts[0][0]},${H} `+pts.map(([x,y])=>`${x},${y}`).join(" ")+` ${pts[pts.length-1][0]},${H}`;
+            const col=mNavDir==="rising"?"#1D9E75":mNavDir==="falling"?"#E24B4A":"#999";
+            const colFade=mNavDir==="rising"?"#1D9E7520":mNavDir==="falling"?"#E24B4A20":"#99999920";
+            const uid=`sp${Math.random().toString(36).slice(2,7)}`;
+            const last=pts[pts.length-1];
+            return(
+              <svg width={W} height={H} style={{display:"block",marginTop:6,overflow:"visible"}}>
+                <defs>
+                  <linearGradient id={uid} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={col} stopOpacity="0.25"/>
+                    <stop offset="100%" stopColor={col} stopOpacity="0.02"/>
+                  </linearGradient>
+                </defs>
+                {/* area fill */}
+                <polygon points={areaPts} fill={`url(#${uid})`}/>
+                {/* line */}
+                <polyline points={linePts} fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                {/* current value dot */}
+                <circle cx={last[0]} cy={last[1]} r="3" fill={col} stroke="var(--bg0)" strokeWidth="1.5"/>
+                {/* min/max reference lines */}
+                <line x1={pad} y1={pad} x2={W-pad} y2={pad} stroke="var(--bd1)" strokeWidth="0.5" strokeDasharray="2,3"/>
+                <line x1={pad} y1={H-pad} x2={W-pad} y2={H-pad} stroke="var(--bd1)" strokeWidth="0.5" strokeDasharray="2,3"/>
+                {/* min/max labels */}
+                <text x={W-1} y={pad+3} fontSize="7" fill="var(--t2)" textAnchor="end">{max.toFixed(2)}</text>
+                <text x={W-1} y={H-1} fontSize="7" fill="var(--t2)" textAnchor="end">{min.toFixed(2)}</text>
+              </svg>
+            );
+          })()}
+          <div style={{...SUB,fontSize:12,marginTop:4,opacity:.7}}>mCap {fB(mktCap)} · NAV {fB(btcNavTot)}</div>
+        </div>
+        <div style={CARD}>
+          <div style={LBL}>ATM accretion ratio</div>
+          <div style={{...VAL,color:accrRatio!=null?(accrRatio>=1.05?"#0F6E56":accrRatio>=1?"#854F0B":"#791F1F"):"var(--t0)"}}>{accrRatio!=null?`${f2(accrRatio)}×`:"—"}</div>
+          <div style={SUB}>{accrRatio!=null&&(accrRatio>=1.05?"accretive":accrRatio>=1?"marginal":"dilutive")} {accrRatio!=null&&"to BTC/share"}</div>
+          <div style={{...SUB,fontSize:10,marginTop:5,opacity:.7}}>{lastEvAccr!=null?`last ATM: ${f2(lastEvAccr)}× (vs live NAV)`:"—"}</div>
+        </div>
+        <div style={CARD}>
+          <div style={LBL}>ATM regime</div>
+          <div style={{marginBottom:6}}><span style={{...pill(rC[0],rC[2],rC[1]),fontSize:14,padding:"4px 10px"}}>{regime}</span></div>
+          <div style={SUB}>{daysSince!=null?`last common: ${daysSince}d ago`:"no events"}</div>
+          <div style={{...SUB,fontSize:10,marginTop:4,opacity:.7}}>{weeksActive>0?`${weeksActive}/4 weeks · ${fB(total4w)}`:"dormant"}</div>
+        </div>
+      </div>
+
+      {/* ── OWNERSHIP FACTOR (always visible summary) ───────────────────────── */}
+      <div style={{...CARD,marginBottom:8,border:`1px solid ${ownershipCtx.bg==="var(--bg1)"?"var(--bd1)":"var(--bd1)"}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",cursor:"pointer"}} onClick={()=>setShowOwnership(v=>!v)}>
+          <div style={{flex:1}}>
+            <div style={{...LBL,marginBottom:6}}>BTC ownership factor (factor 4)</div>
+            <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+              {/* Key ownership metrics — always visible */}
+              <div style={{fontFamily:mono,fontSize:12}}>
+                <span style={{color:"var(--t2)",fontSize:10}}>% max: </span>
+                <span style={{color:"var(--t0)",fontWeight:500}}>{fPct(ownershipMetrics.pctMax,2)}</span>
+              </div>
+              <div style={{fontFamily:mono,fontSize:12}}>
+                <span style={{color:"var(--t2)",fontSize:10}}>% eff. supply: </span>
+                <span style={{color:"var(--t0)",fontWeight:500}}>{fPct(ownershipMetrics.pctEff,2)}</span>
+              </div>
+              <div style={{fontFamily:mono,fontSize:12}}>
+                <span style={{color:"var(--t2)",fontSize:10}}>% exch. equiv: </span>
+                <span style={{color:ownershipMetrics.pctExch>0.2?"#791F1F":"var(--t0)",fontWeight:500}}>{fPct(ownershipMetrics.pctExch,1)}</span>
+              </div>
+              {ownershipMetrics.delta30!=null&&(
+                <div style={{fontFamily:mono,fontSize:12}}>
+                  <span style={{color:"var(--t2)",fontSize:10}}>30D Δ: </span>
+                  <span style={{color:ownershipMetrics.delta30>0?"#0F6E56":ownershipMetrics.delta30<0?"#791F1F":"var(--t0)",fontWeight:500}}>{ownershipMetrics.delta30>0?"+":""}{fK(Math.round(ownershipMetrics.delta30))} BTC</span>
+                </div>
+              )}
+              {ownershipMetrics.accum30xIssuance!=null&&(
+                <span style={pill(absorptionBg,absorptionColor,"transparent",true)}>
+                  {fX(ownershipMetrics.accum30xIssuance)} monthly issuance
+                </span>
+              )}
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:12}}>
+            <span style={{...pill(ownershipCtx.bg,ownershipCtx.color,"transparent",true),whiteSpace:"nowrap"}}>{ownershipCtx.label}</span>
+            <span style={{fontSize:12,fontFamily:mono,color:"var(--t2)"}}>{showOwnership?"▾":"▸"}</span>
+          </div>
+        </div>
+
+        {/* Expanded detail */}
+        {showOwnership&&(
+          <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--bd1)"}}>
+            {/* Metrics grid */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
+              {[
+                {l:"% of max supply",v:fPct(ownershipMetrics.pctMax,2),note:"818k / 21M"},
+                {l:"% of circulating",v:fPct(ownershipMetrics.pctCirc,2),note:`818k / ${fK(Math.round(circulatingBtc/1e6))}M`},
+                {l:"% of eff. supply",v:fPct(ownershipMetrics.pctEff,2),note:`818k / ${fK(Math.round(effectiveBtc/1e6))}M est.`},
+                {l:"% of exch. equiv",v:fPct(ownershipMetrics.pctExch,1),note:`818k / ${fK(Math.round(exchangeBtc/1e6))}M est.`},
+              ].map(({l,v,note})=>(
+                <div key={l} style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
+                  <div style={{...LBL,fontSize:10,marginBottom:3}}>{l}</div>
+                  <div style={{fontSize:18,fontWeight:500,fontFamily:mono,color:"var(--t0)"}}>{v}</div>
+                  <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginTop:2}}>{note}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Purchase / issuance */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+              <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
+                <div style={{...LBL,fontSize:10,marginBottom:3}}>latest purchase vs daily issuance</div>
+                <div style={{fontSize:18,fontWeight:500,fontFamily:mono,color:"var(--t0)"}}>{ownershipMetrics.latestPurchase?fK(Math.round(ownershipMetrics.latestPurchase))+" BTC":"—"}</div>
+                <div style={{fontSize:11,fontFamily:mono,color:"var(--t1)",marginTop:2}}>= {ownershipMetrics.latestPurchaseXDaily?fX(ownershipMetrics.latestPurchaseXDaily):"—"} daily issuance ({btcDailyIssuance} BTC/day post-halving)</div>
+              </div>
+              <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
+                <div style={{...LBL,fontSize:10,marginBottom:3}}>30D accumulation vs monthly issuance</div>
+                <div style={{fontSize:16,fontWeight:500,fontFamily:mono,color:ownershipMetrics.delta30!=null?(ownershipMetrics.delta30>0?"#0F6E56":ownershipMetrics.delta30<0?"#791F1F":"var(--t0)"):"var(--t0)"}}>
+                  {ownershipMetrics.delta30!=null?(ownershipMetrics.delta30>=0?"+":"")+fK(Math.round(ownershipMetrics.delta30))+" BTC":"insufficient history"}
+                </div>
+                <div style={{fontSize:11,fontFamily:mono,color:"var(--t1)",marginTop:2}}>
+                  = {ownershipMetrics.accum30xIssuance!=null?fX(ownershipMetrics.accum30xIssuance):"—"} monthly issuance ({fK(ownershipMetrics.monthlyIssuance)} BTC/mo)
+                  {ownershipMetrics.accum30xIssuance&&<span style={{marginLeft:6,...pill(absorptionBg,absorptionColor,"transparent",true)}}>{ownershipMetrics.absorptionLevel}</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* Absorption threshold guide */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>
+              {[["< 1×","weak float impact","#E1F5EE","#085041"],["1–5×","meaningful","#FAEEDA","#633806"],["5–20×","high absorption","#FAECE7","#4A1B0C"],["> 20×","float squeeze risk","#FCEBEB","#791F1F"]].map(([v,d,bg,tx])=>(
+                <div key={v} style={{background:bg,borderRadius:5,padding:"5px 8px"}}>
+                  <div style={{fontSize:10,fontWeight:600,fontFamily:mono,color:tx}}>{v}</div>
+                  <div style={{fontSize:9,fontFamily:mono,color:tx,opacity:.75,marginTop:1}}>{d}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Supply param inputs */}
+            <div style={{borderTop:"1px solid var(--bd1)",paddingTop:10}}>
+              <div style={{...LBL,marginBottom:8}}>supply parameters (update periodically from Glassnode / CoinGecko)</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
+                {[{l:"Circulating BTC",k:"circulatingBtc",note:"CoinGecko circulating"},{l:"Effective supply",k:"effectiveBtc",note:"excl. lost / illiquid est."},{l:"Exchange inventory",k:"exchangeBtc",note:"Glassnode on-chain"},{l:"Daily issuance",k:"btcDailyIssuance",note:"450 post-2024 halving"}].map(({l,k,note})=>(
+                  <div key={k}>
+                    <div style={{...LBL,fontSize:10}}>{l}</div>
+                    <input style={{...INP,fontSize:11}} type="number" value={settings[k]} onChange={e=>setSettings({[k]:Number(e.target.value)})}/>
+                    <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginTop:2}}>{note}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Market Absorption + BTC/Share Trend row ──────────────────────────── */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+
+        {/* Absorption ratio */}
+        <div style={{...CARD,borderLeft:`3px solid ${absorptionCtx.color}`}}>
+          <div style={LBL}>market absorption ratio</div>
+          <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:4}}>
+            <div style={{fontSize:22,fontWeight:500,fontFamily:mono,color:absorptionCtx.color}}>
+              {absorptionCtx.ratio!=null?`${(absorptionCtx.ratio*100).toFixed(1)}%`:"—"}
+            </div>
+            <span style={pill(absorptionCtx.bg,absorptionCtx.color,"transparent",true)}>{absorptionCtx.label}</span>
+          </div>
+          <div style={{fontSize:12,fontFamily:mono,color:"var(--t2)",lineHeight:1.6}}>
+            {absorptionCtx.ratio!=null
+              ?`~${fK(Math.round(absorptionCtx.dailyAtm))} sh/day ATM vs ${mstrVol?fK(Math.round(mstrVol/1e6))+"M avg vol":"no vol data"}`
+              :mstrVol?"no ATM in last 30 days":"waiting for volume data"}
+          </div>
+          <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginTop:4,opacity:.7}}>
+            &lt;3% low · 3–8% moderate · 8–15% high · &gt;15% critical
+          </div>
+        </div>
+
+        {/* BTC/share trend */}
+        <div style={{...CARD,borderLeft:`3px solid ${btcPerShareTrend.trend==="rising"?"#1D9E75":btcPerShareTrend.trend==="falling"?"#E24B4A":"#888"}`}}>
+          <div style={LBL}>BTC / share trend (30D)</div>
+          <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:4}}>
+            <div style={{fontSize:22,fontWeight:500,fontFamily:mono,color:btcPerShareTrend.trend==="rising"?"#0F6E56":btcPerShareTrend.trend==="falling"?"#791F1F":"var(--t1)"}}>
+              {btcPerShareTrend.trend==="rising"?"↑ Rising":btcPerShareTrend.trend==="falling"?"↓ Falling":btcPerShareTrend.trend==="flat"?"→ Flat":"— No history"}
+            </div>
+          </div>
+          <div style={{fontSize:12,fontFamily:mono,color:"var(--t2)",lineHeight:1.6}}>
+            {btcPerShareTrend.pct30!=null
+              ?`${btcPerShareTrend.pct30>=0?"+":""}${(btcPerShareTrend.pct30*100).toFixed(3)}% over 30D · current ${f5(btcPerSh)} BTC/sh`
+              :"update BTC held to start tracking"}
+          </div>
+          {annualPreferredCost>0&&(
+            <div style={{fontSize:9,fontFamily:mono,color:"#854F0B",marginTop:4}}>
+              ⚠ preferred cost {fB(annualPreferredCost)}/yr — reduces common NAV accretion
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── STRC Preferred Flywheel Panel ────────────────────────────────────── */}
+      {(()=>{
+        const PAR_C={
+          stable:  {bg:"#E1F5EE",tx:"#085041",border:"#1D9E75",label:"stable"},
+          watch:   {bg:"#EEF5FF",tx:"#1a4d8f",border:"#378ADD",label:"watch"},
+          warning: {bg:"#FAEEDA",tx:"#633806",border:"#EF9F27",label:"warning ⚠"},
+          critical:{bg:"#FCEBEB",tx:"#791F1F",border:"#E24B4A",label:"critical ✗"},
+          unknown: {bg:"var(--bg1)",tx:"var(--t2)",border:"var(--bd1)",label:"no data"},
+        };
+        const COV_C={
+          strong:  {c:"#0F6E56",label:"strong"},
+          adequate:{c:"#854F0B",label:"adequate"},
+          warning: {c:"#993C1D",label:"warning"},
+          critical:{c:"#791F1F",label:"critical"},
+          unknown: {c:"var(--t2)",label:"—"},
+        };
+        const pc=PAR_C[strcMetrics.parStatus]||PAR_C.unknown;
+        const cc=COV_C[strcMetrics.coverageStatus]||COV_C.unknown;
+        const sdot=({live:"#1D9E75",proxy:"#1D9E75",proxy2:"#1D9E75",manual:"#378ADD",cached:"#888",fetching:"#EF9F27",pending:"#aaa","no data — set manual":"#E24B4A"}[strcStatus])||"#aaa";
+        return(
+          <div style={{...CARD,marginBottom:8,borderLeft:`3px solid ${pc.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{...LBL,marginBottom:0}}>STRC preferred flywheel</div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:11,fontFamily:mono,color:"var(--t2)",display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{width:6,height:6,borderRadius:"50%",background:sdot,display:"inline-block"}}/>
+                  {effStrc?`$${f2(effStrc)}`:"—"}
+                </span>
+                <span style={{...pill(pc.bg,pc.tx,pc.border,true)}}>{pc.label}</span>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+
+              {/* Tile 1: Par discount/premium */}
+              <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
+                <div style={LBL}>vs $100 par</div>
+                <div style={{fontSize:20,fontWeight:600,fontFamily:mono,
+                  color:strcMetrics.discount==null?"var(--t2)":strcMetrics.discount<-0.03?"#791F1F":strcMetrics.discount<-0.01?"#854F0B":"#0F6E56"}}>
+                  {strcMetrics.discount!=null
+                    ?`${strcMetrics.discount>=0?"+":""}${(strcMetrics.discount*100).toFixed(2)}%`:"—"}
+                </div>
+                <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginTop:3,lineHeight:1.5}}>
+                  52w low: $88 · high: $100.42<br/>
+                  {strcMetrics.parStatus==="critical"?"⚠ flywheel impaired":
+                   strcMetrics.parStatus==="warning"?"ATM capacity reduced":
+                   strcMetrics.parStatus==="watch"?"monitor closely":
+                   strcMetrics.parStatus==="stable"?"ATM capacity intact":"set STRC price in ⚙"}
+                </div>
+              </div>
+
+              {/* Tile 2: Dividend coverage ratio */}
+              <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
+                <div style={LBL}>dividend coverage</div>
+                <div style={{fontSize:20,fontWeight:600,fontFamily:mono,color:cc.c}}>
+                  {strcMetrics.coverageRatio!=null?`${strcMetrics.coverageRatio.toFixed(1)}×`:"—"}
+                </div>
+                <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginTop:3,lineHeight:1.5}}>
+                  {fB(strcMetrics.annualDividend)}/yr cost<br/>
+                  {fB(strcMetrics.totalFunding)}/yr funding ({cc.label})
+                </div>
+              </div>
+
+              {/* Tile 3: Flywheel stress indicator */}
+              <div style={{background:strcMetrics.flywheelStress?"#FAEEDA":"var(--bg0)",
+                borderRadius:7,padding:"8px 10px",border:`1px solid ${strcMetrics.flywheelStress?"#EF9F27":"var(--bd1)"}`}}>
+                <div style={LBL}>flywheel stress</div>
+                <div style={{fontSize:16,fontWeight:600,fontFamily:mono,
+                  color:strcMetrics.flywheelStress?"#854F0B":"#0F6E56",marginBottom:4}}>
+                  {strcMetrics.flywheelStress?"⚠ Detected":"✓ None"}
+                </div>
+                <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",lineHeight:1.5}}>
+                  {strcMetrics.flywheelStress
+                    ?"STRC discount forming — capital rotating preferred over common"
+                    :"STRC stable at par · preferred issuance capacity intact"}
+                </div>
+              </div>
+            </div>
+
+            {/* STRC price override input */}
+            <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
+              <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)"}}>STRC override:</div>
+              <input style={{...INP,width:120,fontSize:11}} type="number" step="0.01"
+                placeholder="blank = live fetch" value={strcManualPrice||""}
+                onChange={e=>setSettings({strcManualPrice:Number(e.target.value)})}/>
+              {strcManualPrice>0&&<button style={{...BTN,fontSize:10}} onClick={()=>setSettings({strcManualPrice:0})}>clear</button>}
+              <div style={{fontSize:10,fontFamily:mono,color:"var(--t2)",marginLeft:4}}>
+                NASDAQ: STRC · par $100 · {strcStatus}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Live data row ───────────────────────────────────────────────────── */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:8}}>
+        {[{lbl:"MSTR",val:effMstr?`$${f2(effMstr)}`:"—",sub:mstrStatus},{lbl:"BTC",val:btcP?`$${fK(Math.round(btcP))}`:"—",sub:"coingecko"},{lbl:"BTC / dil. sh",val:f5(btcPerSh),sub:`${(btcHeld/1e3).toFixed(1)}k ÷ ${(dilutedShares/1e6).toFixed(1)}M`},{lbl:"BTC NAV / sh",val:navPerSh?`$${f2(navPerSh)}`:"—",sub:<span style={pill(tC[0],tC[1])}>{tC[2]}</span>}].map(({lbl,val,sub})=>(
+          <div key={lbl} style={CARD}><div style={LBL}>{lbl}</div><div style={{...VAL,fontSize:22}}>{val}</div><div style={{...SUB,fontSize:10,marginTop:4}}>{sub}</div></div>
+        ))}
+      </div>
+
+      {/* ── BTC trend ───────────────────────────────────────────────────────── */}
+      <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:10,flexWrap:"wrap"}}>
+        <span style={{...LBL,marginBottom:0,marginRight:3}}>BTC trend:</span>
+        {["auto","uptrend","range","downtrend"].map(t=>{const on=btcTrendOverride===t;return<button key={t} onClick={()=>setSettings({btcTrendOverride:t})} style={{...BTN,fontSize:10,padding:"3px 8px",background:on?"var(--t0)":undefined,color:on?"var(--bg0)":undefined}}>{t==="auto"?`auto [${autoTrend}]`:t}</button>;})}
+      </div>
+
+      {/* ── Pro-forma ───────────────────────────────────────────────────────── */}
+      {undeployedProceeds>0&&(
+        <div style={{background:"#EEEDFE",border:"1px solid #AFA9EC",borderRadius:10,padding:"12px 14px",marginBottom:8}}>
+          <div style={{...LBL,color:"#534AB7",marginBottom:8}}>pro-forma — {fB(undeployedProceeds)} undeployed @ ${fK(Math.round(buyPx))}/BTC</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+            {[{l:"Reported BTC/sh",v:f5(btcPerSh),s:`NAV $${f2(navPerSh)}`},{l:"Pro-forma BTC/sh",v:f5(pfBtcPerSh),s:`NAV $${f2(pfNavPerSh)}`},{l:"Pro-forma mNAV",v:pfMNav!=null?`${f2(pfMNav)}×`:"—",s:`reported ${dilMNav!=null?f2(dilMNav)+"×":"—"}`}].map(({l,v,s})=>(
+              <div key={l}><div style={{...LBL,color:"#534AB7"}}>{l}</div><div style={{fontSize:16,fontWeight:500,fontFamily:mono,color:"#26215C"}}>{v}</div><div style={{fontSize:10,color:"#534AB7",fontFamily:mono,marginTop:2}}>{s}</div></div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Calendar ────────────────────────────────────────────────────────── */}
+      <button style={{...BTN,marginBottom:6,width:"100%",textAlign:"left",padding:"8px 12px",fontSize:11}} onClick={()=>setShowCal(v=>!v)}>
+        {showCal?"▾":"▸"} earnings calendar
+        {ne&&(()=>{const{daysTo,inBlackout}=calSt(ne.date);return<span style={{marginLeft:8,fontSize:10,fontFamily:mono,color:inBlackout?"#993C1D":daysTo<=30?"#854F0B":"var(--t2)"}}>{inBlackout?`⚠ BLACKOUT · ${ne.label} in ${daysTo}d`:daysTo>0?`${ne.label} in ${daysTo}d`:""}</span>})()}
+      </button>
+      {showCal&&(
+        <div style={{...CARD,marginBottom:8}}>
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
+            {EARNINGS.map(ev=>{
+              const{daysTo,inBlackout,isPast}=calSt(ev.date);
+              const bStart=new Date(new Date(ev.date).getTime()-BLACKOUT_DAYS*86400000).toISOString().slice(0,10);
+              const badge=isPast?<span style={pill("#F1EFE8","#888","transparent",true)}>past</span>:inBlackout?<span style={pill("#FAECE7","#993C1D","#D85A30",true)}>⚠ BLACKOUT NOW</span>:daysTo<=30?<span style={pill("#FAEEDA","#854F0B","#EF9F27",true)}>{daysTo}d away</span>:<span style={pill("#F3F2EE","#666","transparent",true)}>{daysTo}d</span>;
+              return(
+                <div key={ev.date} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:"var(--bg0)",borderRadius:7,border:"1px solid var(--bd1)"}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:12,fontFamily:mono,color:isPast?"var(--t2)":inBlackout?"#993C1D":daysTo<=30?"#854F0B":"var(--t0)",fontWeight:500}}>{ev.label}{!ev.confirmed?" (est.)":""}</div>
+                    <div style={{fontSize:12,fontFamily:mono,color:"var(--t2)",marginTop:2}}>{ev.date} · blackout from {bStart}</div>
+                  </div>
+                  {badge}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{fontSize:12,fontFamily:mono,color:"var(--t2)",lineHeight:1.6}}>Blackout = {BLACKOUT_DAYS}d before earnings. ATM typically pauses — Dormant signal less reliable. Unconfirmed dates are estimates.</div>
+        </div>
+      )}
+
+      {/* ── SEC Sync ────────────────────────────────────────────────────────── */}
+      <button style={{...BTN,marginBottom:6,width:"100%",textAlign:"left",padding:"8px 12px",fontSize:11}} onClick={()=>setShowSync(v=>!v)}>
+        {showSync?"▾":"▸"} sync from SEC EDGAR — one-click 8-K update
+      </button>
+      {showSync&&(
+        <div style={{...CARD,marginBottom:8}}>
+          <div style={{fontSize:12,fontFamily:mono,color:"var(--t2)",marginBottom:10,lineHeight:1.7}}>Fetches the latest MSTR 8-K, extracts BTC holdings + ATM data via rule-based parsing. Add Gemini key in ⚙ for AI assist when rules fail. Nothing updates until you confirm.</div>
+          {/* Sync buttons */}
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
+            <button style={{...GBTN,position:"relative"}} onClick={()=>runSync("new")}>
+              ⟳ sync new since {lastSyncedDate}
+              {autoSyncBadge>0&&<span style={{position:"absolute",top:-6,right:-6,background:"#E24B4A",color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{autoSyncBadge}</span>}
+            </button>
+            <button style={BTN} onClick={()=>runSync("single")}>latest only</button>
+            {syncUrl&&<a href={syncUrl} target="_blank" rel="noreferrer" style={{fontSize:11,fontFamily:mono,color:"#378ADD"}}>view filing ↗</a>}
+            <label style={{display:"flex",alignItems:"center",gap:5,fontSize:10,fontFamily:mono,color:"var(--t2)",marginLeft:"auto",cursor:"pointer"}}>
+              <input type="checkbox" checked={autoSyncEnabled} onChange={e=>setSettings({autoSyncEnabled:e.target.checked})}/>
+              auto-check daily
+            </label>
+          </div>
+          {syncStatus&&<div style={{fontSize:11,fontFamily:mono,color:"var(--t1)",marginBottom:8,lineHeight:1.6}}>{syncStatus}</div>}
+          {syncResult&&(
+            <div style={{background:"var(--bg0)",border:"1px solid var(--bd2)",borderRadius:8,padding:12}}>
+              {syncResult.mode==="multi"?(
+                <>
+                  <div style={{...LBL,marginBottom:8}}>
+                    {syncResult.count} new filing{syncResult.count!==1?"s":""} · {syncResult.events.length} ATM event{syncResult.events.length!==1?"s":""}
+                    {syncResult.btcUpdates.length>0&&` · BTC → ${fK(syncResult.btcUpdates.sort((a,b)=>new Date(b.date)-new Date(a.date))[0].btcHeld)}`}
+                  </div>
+                  {syncResult.events.length>0&&(
+                    <div style={{overflowX:"auto",marginBottom:10}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,fontFamily:mono}}>
+                        <thead><tr>{["date","type","shares","proceeds","avg $"].map(h=><th key={h} style={{textAlign:"left",padding:"3px 8px",color:"var(--t2)",borderBottom:"1px solid var(--bd1)",fontSize:9,textTransform:"uppercase"}}>{h}</th>)}</tr></thead>
+                        <tbody>
+                          {syncResult.events.map((ev,i)=>(
+                            <tr key={i} style={{borderBottom:"1px solid var(--bd1)"}}>
+                              <td style={{padding:"4px 8px",fontFamily:mono,fontSize:11}}>{ev.date}</td>
+                              <td style={{padding:"4px 8px"}}><span style={{background:ev.type==="common"?"#E6F1FB":"#EEEDFE",color:ev.type==="common"?"#0C447C":"#26215C",borderRadius:3,padding:"1px 6px",fontSize:9}}>{ev.type==="preferred"?"STRC/pref":ev.type}</span></td>
+                              <td style={{padding:"4px 8px",fontFamily:mono,fontSize:11}}>{(ev.shares/1e6).toFixed(2)}M</td>
+                              <td style={{padding:"4px 8px",fontFamily:mono,fontSize:11}}>{fB(ev.proceeds)}</td>
+                              <td style={{padding:"4px 8px",fontFamily:mono,fontSize:11}}>${f2(ev.avgPrice)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {syncResult.events.length===0&&<div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginBottom:10}}>No ATM events in new filings (BTC-only update).</div>}
+                  <div style={{fontSize:10,fontFamily:mono,color:"var(--t2)",marginBottom:10,lineHeight:1.6}}>
+                    Adds {syncResult.events.length} event{syncResult.events.length!==1?"s":""} to ATM log
+                    {syncResult.btcUpdates.length>0&&" · BTC held updated"}
+                    {" · lastSyncedDate → "+new Date().toISOString().slice(0,10)}
+                  </div>
+                </>
+              ):(
+                <div style={{fontSize:11,fontFamily:mono,color:"var(--t1)",marginBottom:10}}>
+                  {syncResult.events?.length>0?`${syncResult.events.length} security event(s) found`:"No events detected"}
+                  {syncResult.btcUpdates?.length>0&&` · BTC: ${fK(syncResult.btcUpdates[0].btcHeld)}`}
+                </div>
+              )}
+              <div style={{display:"flex",gap:8}}>
+                <button style={GBTN} onClick={applySync}>✓ apply all</button>
+                <button style={BTN} onClick={()=>{setSyncResult(null);setSyncStatus("");}}>✗ discard</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Manual inputs ───────────────────────────────────────────────────── */}
+      <button style={{...BTN,marginBottom:6,width:"100%",textAlign:"left",padding:"8px 12px",fontSize:11}} onClick={()=>setShowInputs(v=>!v)}>
+        {showInputs?"▾":"▸"} manual inputs — BTC held · diluted shares · undeployed proceeds
+      </button>
+      {showInputs&&(
+        <div style={{...CARD,marginBottom:8}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            {[{l:"BTC held (from latest 8-K)",k:"btcHeld",note:"auto-logged for 30D delta tracking"},{l:"Fully diluted shares",k:"dilutedShares",note:""},{l:"Undeployed ATM proceeds ($)",k:"undeployedProceeds",note:"raised but BTC not yet confirmed"},{l:"Assumed BTC buy price ($)",k:"assumedBtcBuyPrice",note:"0 = use live BTC price"}].map(({l,k,note})=>(
+              <div key={k}><div style={LBL}>{l}</div>{note&&<div style={{fontSize:9,color:"var(--t2)",fontFamily:mono,marginBottom:3}}>{note}</div>}<input style={INP} type="number" value={settings[k]} onChange={e=>setSettings({[k]:Number(e.target.value)})}/></div>
+            ))}
+          </div>
+          <label style={{display:"flex",alignItems:"center",gap:7,fontSize:11,fontFamily:mono,color:"var(--t1)",cursor:"pointer"}}>
+            <input type="checkbox" checked={pendingFlag} onChange={e=>setSettings({pendingFlag:e.target.checked})}/>
+            mark as Pending Deployment (ATM sold, BTC purchase not yet disclosed)
+          </label>
+        </div>
+      )}
+
+      {/* ── ATM log ─────────────────────────────────────────────────────────── */}
+      <button style={{...BTN,marginBottom:6,width:"100%",textAlign:"left",padding:"8px 12px",fontSize:11}} onClick={()=>setShowLog(v=>!v)}>
+        {showLog?"▾":"▸"} ATM event log — {atmEvents.length} events · last: {latestCommon?.date||"none"}{daysSince!=null?` (${daysSince}d ago)`:""}
+      </button>
+      {showLog&&(
+        <div style={{...CARD,marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}><button style={BTN} onClick={()=>setShowAdd(v=>!v)}>+ add event</button></div>
+          {showAdd&&(
+            <div style={{background:"var(--bg0)",border:"1px solid var(--bd2)",borderRadius:7,padding:10,marginBottom:10}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:7,marginBottom:8}}>
+                {[{l:"date",el:<input style={INP} type="date" value={newEv.date} onChange={e=>setNewEv(p=>({...p,date:e.target.value}))}/>},{l:"type",el:<select style={INP} value={newEv.type} onChange={e=>setNewEv(p=>({...p,type:e.target.value}))}><option value="common">common</option><option value="preferred">preferred</option></select>},{l:"shares",el:<input style={INP} type="number" placeholder="1200000" value={newEv.shares} onChange={e=>setNewEv(p=>({...p,shares:e.target.value}))}/>},{l:"proceeds $M",el:<input style={INP} type="number" placeholder="255" value={newEv.proceeds} onChange={e=>setNewEv(p=>({...p,proceeds:e.target.value}))}/>},{l:"avg price",el:<input style={INP} type="number" placeholder="auto" value={newEv.avgPrice} onChange={e=>setNewEv(p=>({...p,avgPrice:e.target.value}))}/>}].map(({l,el})=>(
+                  <div key={l}><div style={LBL}>{l}</div>{el}</div>
+                ))}
+              </div>
+              <button style={{...BTN,background:"var(--t0)",color:"var(--bg0)"}} onClick={addEvent}>save</button>
+            </div>
+          )}
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,fontFamily:mono}}>
+              <thead><tr>{["date","type","shares","proceeds","avg price","accretion vs live NAV"].map(h=><th key={h} style={{textAlign:"left",padding:"4px 8px",color:"var(--t2)",fontWeight:500,borderBottom:"1px solid var(--bd1)",whiteSpace:"nowrap",fontSize:9,textTransform:"uppercase",letterSpacing:"0.07em"}}>{h}</th>)}</tr></thead>
+              <tbody>
+                {[...atmEvents].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(ev=>{
+                  const ac=navPerSh>0?ev.avgPrice/navPerSh:null;
+                  return(
+                    <tr key={ev.id} style={{borderBottom:"1px solid var(--bd1)",background:ev.id===latestCommon?.id?"rgba(100,100,200,0.05)":undefined}}>
+                      <td style={{padding:"6px 8px",color:"var(--t0)"}}>{ev.date}</td>
+                      <td style={{padding:"6px 8px"}}><span style={pill(ev.type==="common"?"#E6F1FB":"#EEEDFE",ev.type==="common"?"#0C447C":"#26215C","transparent",true)}>{ev.type}</span></td>
+                      <td style={{padding:"6px 8px",color:"var(--t1)"}}>{(ev.shares/1e6).toFixed(2)}M</td>
+                      <td style={{padding:"6px 8px",color:"var(--t1)"}}>{fB(ev.proceeds)}</td>
+                      <td style={{padding:"6px 8px",color:"var(--t0)"}}>${f2(ev.avgPrice)}</td>
+                      <td style={{padding:"6px 8px"}}>{ac!=null?<span style={{color:ac>=1.05?"#0F6E56":ac>=1?"#854F0B":"#791F1F",fontWeight:600}}>{f2(ac)}× {ac>=1.05?"↑":ac>=1?"~":"↓"}</span>:"—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Trader Tools ────────────────────────────────────────────────────── */}
+      <button style={{...BTN,marginBottom:6,width:"100%",textAlign:"left",padding:"8px 12px",fontSize:12}} onClick={()=>setShowTrader(v=>!v)}>
+        {showTrader?"▾":"▸"} trader tools — position tracker · pair trade sizing
+      </button>
+      {showTrader&&(()=>{
+        // Position P&L calc
+        const entryMstr=positionEntryPrice>0?positionEntryPrice:null;
+        const entryBtc=positionEntryBtcPrice>0?positionEntryBtcPrice:null;
+        const mstrRet=entryMstr&&effMstr?(effMstr-entryMstr)/entryMstr:null;
+        const btcRet=entryBtc&&btcP?(btcP-entryBtc)/entryBtc:null;
+        const alpha=mstrRet!=null&&btcRet!=null?mstrRet-btcRet:null;
+        const pnlUsd=positionSizeUsd>0&&mstrRet!=null?positionSizeUsd*mstrRet:null;
+        // Pair trade sizing
+        const pairMstr=positionSizeUsd>0&&effMstr?Math.floor(positionSizeUsd/effMstr):null;
+        const pairBtc=positionSizeUsd>0&&btcP?positionSizeUsd/btcP:null;
+        return(
+          <div style={{...CARD,marginBottom:8}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+
+              {/* Position tracker */}
+              <div>
+                <div style={{...LBL,marginBottom:8}}>position tracker</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:10}}>
+                  {[
+                    {l:"Entry MSTR ($)",    k:"positionEntryPrice",    ph:"e.g. 165"},
+                    {l:"Entry BTC ($)",     k:"positionEntryBtcPrice", ph:"e.g. 76000"},
+                    {l:"Entry date",        k:"positionDate",          ph:"2026-04-01",type:"date"},
+                    {l:"Position size ($)", k:"positionSizeUsd",       ph:"e.g. 10000"},
+                  ].map(({l,k,ph,type})=>(
+                    <div key={k}>
+                      <div style={{...LBL,fontSize:10}}>{l}</div>
+                      <input style={{...INP,fontSize:12}} type={type||"number"} placeholder={ph}
+                        value={settings[k]} onChange={e=>setSettings({[k]:type==="date"?e.target.value:Number(e.target.value)})}/>
+                    </div>
+                  ))}
+                </div>
+                {entryMstr&&(
+                  <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                      {[
+                        {l:"MSTR return",v:mstrRet!=null?`${mstrRet>=0?"+":""}${(mstrRet*100).toFixed(1)}%`:"—",c:mstrRet!=null?(mstrRet>0?"#0F6E56":"#E24B4A"):"var(--t1)"},
+                        {l:"BTC return", v:btcRet!=null?`${btcRet>=0?"+":""}${(btcRet*100).toFixed(1)}%`:"—",  c:btcRet!=null?(btcRet>0?"#0F6E56":"#E24B4A"):"var(--t1)"},
+                        {l:"Alpha vs BTC",v:alpha!=null?`${alpha>=0?"+":""}${(alpha*100).toFixed(1)}%`:"—",    c:alpha!=null?(alpha>0?"#0F6E56":"#E24B4A"):"var(--t1)"},
+                      ].map(({l,v,c:col})=>(
+                        <div key={l}>
+                          <div style={{...LBL,fontSize:10}}>{l}</div>
+                          <div style={{fontSize:16,fontWeight:600,fontFamily:mono,color:col}}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {pnlUsd!=null&&<div style={{fontSize:12,fontFamily:mono,color:pnlUsd>0?"#0F6E56":"#E24B4A",marginTop:6}}>
+                      P&L: {pnlUsd>=0?"+":""}{fB(Math.abs(pnlUsd))} on ${fK(positionSizeUsd)} position
+                    </div>}
+                  </div>
+                )}
+              </div>
+
+              {/* Pair trade sizing */}
+              <div>
+                <div style={{...LBL,marginBottom:8}}>pair trade sizing</div>
+                <div style={{fontSize:12,fontFamily:mono,color:"var(--t2)",marginBottom:8,lineHeight:1.6}}>
+                  SHORT MSTR / LONG BTC equal-dollar
+                </div>
+                <div style={{marginBottom:8}}>
+                  <div style={{...LBL,fontSize:10}}>notional size ($)</div>
+                  <input style={{...INP,fontSize:12}} type="number" placeholder="e.g. 10000"
+                    value={positionSizeUsd} onChange={e=>setSettings({positionSizeUsd:Number(e.target.value)})}/>
+                </div>
+                {positionSizeUsd>0&&effMstr&&btcP&&(
+                  <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                      <div>
+                        <div style={{...LBL,fontSize:10}}>SHORT MSTR shares</div>
+                        <div style={{fontSize:16,fontWeight:600,fontFamily:mono,color:"var(--t0)"}}>{fK(pairMstr)}</div>
+                        <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)"}}>${f2(effMstr)}/sh</div>
+                      </div>
+                      <div>
+                        <div style={{...LBL,fontSize:10}}>LONG BTC</div>
+                        <div style={{fontSize:16,fontWeight:600,fontFamily:mono,color:"var(--t0)"}}>{pairBtc?.toFixed(4)}</div>
+                        <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)"}}>${fK(Math.round(btcP))}/BTC</div>
+                      </div>
+                    </div>
+                    <div style={{fontSize:11,fontFamily:mono,color:"#854F0B",lineHeight:1.6,borderTop:"1px solid var(--bd1)",paddingTop:6}}>
+                      ⚠ Equal-dollar assumes beta=1. MSTR beta to BTC is regime-dependent —{" "}
+                      {regime==="Dormant"?"Dormant: beta elevated (~1.5–2×), consider sizing MSTR leg smaller.":
+                       regime==="Aggressive"?"Aggressive: beta compressed (~0.5–1×), consider sizing MSTR leg larger.":
+                       "verify beta before sizing."}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Legend ──────────────────────────────────────────────────────────── */}
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:8,paddingTop:8,borderTop:"1px solid var(--bd1)"}}>
+        {[["Dormant","premium can expand"],["Light","manageable"],["Active","ceiling active"],["Aggressive","do not chase"],["Pending","metrics stale"]].map(([r,d])=>{const c=REGIME_C[r]||REGIME_C.Dormant;return<div key={r} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,fontFamily:mono,color:"var(--t2)"}}><span style={pill(c[0],c[2],c[1],true)}>{r}</span><span>{d}</span></div>;})}
+      </div>
+
+      <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginTop:10,lineHeight:1.7,borderTop:"1px solid var(--bd1)",paddingTop:8}}>
+        personal quant tool · not financial advice · verify sec filings before trading<br/>
+        signal = 5-factor: diluted mNAV + ATM regime + BTC trend + BTC ownership + STRC flywheel · hedge = equal-dollar (beta is regime-dependent)
+      </div>
+    </div>
+  );
+}
+
+// Error boundary — prevents any single error from white-screening the whole app
+class ErrorBoundary extends React.Component{
+  constructor(props){super(props);this.state={hasError:false,msg:""};}
+  static getDerivedStateFromError(error){return{hasError:true,msg:error?.message||"Unknown error"};}
+  componentDidCatch(error,info){console.error("Dashboard error:",error,info);}
+  render(){
+    if(this.state.hasError){
+      return React.createElement("div",{style:{padding:"24px",fontFamily:"monospace",maxWidth:600,margin:"40px auto",lineHeight:1.6}},
+        React.createElement("h2",{style:{fontSize:18,marginBottom:12}},"⚠ Something went wrong"),
+        React.createElement("p",{style:{fontSize:13,color:"#666",marginBottom:12}},"The dashboard hit an error while loading. This is often a temporary data-fetch issue."),
+        React.createElement("p",{style:{fontSize:12,color:"#999",marginBottom:16,fontFamily:"monospace"}},"Error: "+this.state.msg),
+        React.createElement("button",{onClick:()=>{try{localStorage.clear();}catch(e){}location.reload();},style:{padding:"8px 16px",fontSize:13,cursor:"pointer",borderRadius:6,border:"1px solid #ccc",background:"#f5f5f5",marginRight:8}},"Reset & reload"),
+        React.createElement("button",{onClick:()=>location.reload(),style:{padding:"8px 16px",fontSize:13,cursor:"pointer",borderRadius:6,border:"1px solid #ccc",background:"#fff"}},"Just reload")
+      );
+    }
+    return this.props.children;
+  }
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  React.createElement(ErrorBoundary,null,React.createElement(App,null))
+);
+</script>
+</body>
+</html>
