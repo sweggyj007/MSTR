@@ -263,6 +263,42 @@ function getStrcMetrics({strcPrice, preferredOutstanding, preferredDividendRate,
          flywheelStress,annualisedAtm,totalFunding};
 }
 
+// ── BTC net-sale detector (30D) — flag only, does not affect main signal ──────
+// Per design: "Sale is not the signal. Sale context is the signal." This is the v1
+// flag layer — detects sales and classifies conservatively. Does NOT touch getSignal().
+function getBtcSaleFlag(btcHeldLog){
+  if(!btcHeldLog||btcHeldLog.length<2)return{hasSale:false};
+  const cutoff=Date.now()-30*86400000;
+  // Sale events recorded with delta<0 in the last 30 days
+  const recentSales=btcHeldLog.filter(l=>l.ts>cutoff&&l.isNetSale&&l.delta<0);
+  if(!recentSales.length)return{hasSale:false};
+
+  const totalSold=recentSales.reduce((s,l)=>s+Math.abs(l.delta),0);
+  const saleCount=recentSales.length;
+  // Largest single sale as % of holdings at the time
+  const maxPct=Math.max(...recentSales.map(l=>l.prevBtcHeld>0?Math.abs(l.delta)/l.prevBtcHeld:0));
+  // 30D net flow: sum of all deltas (sales + purchases) in window
+  const recentAll=btcHeldLog.filter(l=>l.ts>cutoff&&l.delta!=null);
+  const netFlow=recentAll.reduce((s,l)=>s+l.delta,0);
+
+  // Conservative classification (noise-first ordering)
+  let cls,color,bg,note;
+  if(maxPct<0.0005&&netFlow>0&&saleCount<=1){
+    cls="Technical / noise";color="#666";bg="#F1EFE8";
+    note="small isolated sale · 30D net flow still positive · narrative flag only";
+  }else if(netFlow<0||saleCount>=3){
+    cls="Regime watch";color="#791F1F";bg="#FCEBEB";
+    note="net distribution over 30D or repeated sales · monitor for accumulation-narrative break";
+  }else if(saleCount>=2){
+    cls="Watch";color="#854F0B";bg="#FAEEDA";
+    note="repeated small sales · context inconclusive · monitor";
+  }else{
+    cls="Isolated sale";color="#854F0B";bg="#FAEEDA";
+    note="single sale · 30D net flow positive · monitor use-of-proceeds in filings";
+  }
+  return{hasSale:true,totalSold,saleCount,maxPct,netFlow,cls,color,bg,note};
+}
+
 // ── BTC/share trend ──────────────────────────────────────────────────────────
 function getBtcPerShareTrend(btcHeldLog, dilutedShares){
   if(!btcHeldLog||btcHeldLog.length<2||!dilutedShares)return{trend:"unknown",points:[],delta30:null,pct30:null};
@@ -661,9 +697,19 @@ function App(){
       // Staleness tracking
       if(next.btcHeld!==prev.btcHeld&&next.btcHeld>0) next.btcHeldUpdatedAt=Date.now();
       if(next.dilutedShares!==prev.dilutedShares&&next.dilutedShares>0) next.dilSharesUpdatedAt=Date.now();
-      // Auto-log btcHeld changes for 30D delta tracking
+      // Auto-log btcHeld changes for 30D delta tracking + BTC flow context
+      // Records the NEW value with delta, so net sales (negative delta) are captured.
       if(next.btcHeld!==prev.btcHeld&&next.btcHeld>0){
-        const newLog=[...(prev.btcHeldLog||[]),{ts:Date.now(),btcHeld:prev.btcHeld}].slice(-60);
+        const delta=next.btcHeld-prev.btcHeld;
+        const deltaPct=prev.btcHeld>0?delta/prev.btcHeld:0;
+        const newLog=[...(prev.btcHeldLog||[]),{
+          ts:Date.now(),
+          btcHeld:next.btcHeld,        // log the NEW value (was logging prev — bug)
+          prevBtcHeld:prev.btcHeld,
+          delta,
+          deltaPct,
+          isNetSale:delta<0
+        }].slice(-60);
         next.btcHeldLog=newLog;
       }
       clearTimeout(saveTimer.current);
@@ -836,7 +882,9 @@ function App(){
       // Apply BTC updates (use most recent)
       if(res.btcUpdates&&res.btcUpdates.length>0){
         const latest=res.btcUpdates.sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
-        if(latest.btcHeld>prev.btcHeld){
+        // Accept holdings in ANY direction — Strategy began net selling in 2026.
+        // "BTC held can go down" — a decrease is a real, meaningful event, not noise to ignore.
+        if(latest.btcHeld>0&&latest.btcHeld!==prev.btcHeld){
           next.btcHeld=latest.btcHeld;
           next.btcHeldUpdatedAt=Date.now();
         }
@@ -945,6 +993,7 @@ function App(){
   const ownershipCtx=getOwnershipContext({ownershipMetrics,accrRatio,regime,mNav:dilMNav});
   const absorptionCtx=getAbsorptionRatio(atmEvents,mstrVol);
   const btcPerShareTrend=getBtcPerShareTrend(btcHeldLog,dilutedShares);
+  const btcSaleFlag=getBtcSaleFlag(btcHeldLog);
   const effStrc=strcManualPrice>0?strcManualPrice:strcPrice;
   const strcMetrics=getStrcMetrics({strcPrice:effStrc,preferredOutstanding,preferredDividendRate,softwareRevenueAnnual,atmEvents,mstrPrice,effMstr});
   const sig=dilMNav!=null?getSignal({mNav:dilMNav,regime,trend,blackout,ownershipCtx,absorptionCtx,btcPerShareTrend,strcMetrics}):null;
@@ -1191,6 +1240,18 @@ function App(){
                 <span style={pill(absorptionBg,absorptionColor,"transparent",true)}>
                   {fX(ownershipMetrics.accum30xIssuance)} monthly issuance
                 </span>
+              )}
+              {btcSaleFlag.hasSale&&(
+                <div style={{marginTop:8,padding:"8px 11px",borderRadius:7,background:btcSaleFlag.bg,border:`1px solid ${btcSaleFlag.color}33`,fontFamily:mono}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <span style={{fontSize:12,fontWeight:600,color:btcSaleFlag.color}}>⚑ BTC net sale detected (30D)</span>
+                    <span style={{fontSize:11,color:btcSaleFlag.color}}>{btcSaleFlag.cls}</span>
+                  </div>
+                  <div style={{fontSize:11,color:"var(--t2)",marginTop:4,lineHeight:1.55}}>
+                    {btcSaleFlag.saleCount} sale event{btcSaleFlag.saleCount!==1?"s":""} · {fK(Math.round(btcSaleFlag.totalSold))} BTC sold · 30D net flow {btcSaleFlag.netFlow>=0?"+":""}{fK(Math.round(btcSaleFlag.netFlow))} BTC<br/>
+                    {btcSaleFlag.note} · <span style={{opacity:.7}}>flag only, no signal impact</span>
+                  </div>
+                </div>
               )}
             </div>
           </div>
