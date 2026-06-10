@@ -24,6 +24,13 @@
     [data-theme="dark"] .sig-neut   { background:#222220!important; border-color:#888884!important; color:#BBBBAA!important; }
     [data-theme="dark"] .sig-caut   { background:#16103A!important; border-color:#9B8FFF!important; color:#BDB5FF!important; }
     [data-theme="dark"] .sig-btcov  { background:#2E2008!important; border-color:#F5A623!important; color:#F5C842!important; }
+    /* Responsive factor grid — stacks on narrow screens */
+    .factor-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:8px; }
+    .modifier-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
+    @media (max-width:760px){
+      .factor-grid { grid-template-columns:1fr; }
+      .modifier-grid { grid-template-columns:1fr; }
+    }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     body{background:var(--bg0);color:var(--t0);font-family:var(--sans);min-height:100vh;}
     #root{max-width:760px;margin:0 auto;padding:20px 14px 40px;}
@@ -680,6 +687,7 @@ function App(){
   const[showSync,setShowSync]=useState(false);
   const[showTrader,setShowTrader]=useState(false);
   const[showOwnership,setShowOwnership]=useState(false);
+  const[showStrcDetail,setShowStrcDetail]=useState(false);
   const[syncStatus,setSyncStatus]=useState("");
   const[syncResult,setSyncResult]=useState(null);
   const[syncFiled,setSyncFiled]=useState(null);
@@ -1016,6 +1024,14 @@ function App(){
   // ── Styles ──────────────────────────────────────────────────────────────────
   const mono=`'JetBrains Mono','Fira Mono','Consolas',monospace`;
   const CARD={background:"var(--bg1)",border:"1px solid var(--bd1)",borderRadius:10,padding:"12px 14px"};
+  // Section header — visual grouping (Bloomberg principle: hierarchy by importance)
+  const SECHDR={display:"flex",alignItems:"baseline",gap:10,margin:"22px 2px 10px",fontFamily:mono};
+  const SECHDR_T={fontSize:12,fontWeight:700,letterSpacing:"0.16em",textTransform:"uppercase",color:"var(--t1)"};
+  const SECHDR_S={fontSize:10,color:"var(--t2)",letterSpacing:"0.04em"};
+  // Uniform factor-card: same template for all 5 factors (UI mirrors framework)
+  const FCARD=(barColor)=>({...CARD,borderLeft:`3px solid ${barColor}`,display:"flex",flexDirection:"column"});
+  const FHDR={display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,gap:8};
+  const FTAG={fontSize:10,fontWeight:700,letterSpacing:"0.13em",textTransform:"uppercase",color:"var(--t2)",fontFamily:mono};
   const LBL={fontSize:11,fontWeight:600,letterSpacing:"0.11em",textTransform:"uppercase",color:"var(--t2)",marginBottom:4,fontFamily:mono};
   const VAL={fontSize:26,fontWeight:500,fontFamily:mono,color:"var(--t0)",lineHeight:1.15};
   const SUB={fontSize:13,color:"var(--t1)",marginTop:3,fontFamily:mono};
@@ -1148,12 +1164,21 @@ function App(){
         </div>
       )}
 
-      {/* ── Three pillars ───────────────────────────────────────────────────── */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-        <div style={CARD}>
-          <div style={LBL}>diluted mNAV</div>
+      {/* ══ FACTORS — UI structure mirrors the 5-factor signal framework ══ */}
+      <div style={SECHDR}><span style={SECHDR_T}>Factors</span><span style={SECHDR_S}>F1–F5 · the evidence behind the verdict</span></div>
+
+      <div className="factor-grid">
+
+        {/* F1 · VALUATION */}
+        <div style={FCARD(dilMNav!=null?(dilMNav<1?"#1D9E75":dilMNav<1.15?"#EF9F27":"#E24B4A"):"var(--bd2)")}>
+          <div style={FHDR}>
+            <span style={FTAG}>F1 · Valuation</span>
+            <span style={pill(dilMNav!=null&&dilMNav<1?"#E1F5EE":dilMNav!=null&&dilMNav<1.15?"#FAEEDA":"#FCEBEB",dilMNav!=null&&dilMNav<1?"#085041":dilMNav!=null&&dilMNav<1.15?"#633806":"#791F1F","transparent",true)}>
+              {dilMNav==null?"—":dilMNav<1?"discount":dilMNav<1.1?"fair":dilMNav<1.4?"elevated":dilMNav<2?"high":"extreme"}
+            </span>
+          </div>
           <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-            <div style={{...VAL,color:dilMNav!=null?(dilMNav<1?"#0F6E56":dilMNav>1.15?"#791F1F":"var(--t0)"):"var(--t0)"}}>{dilMNav!=null?`${f2(dilMNav)}×`:"—"}</div>
+            <div style={VAL}>{dilMNav!=null?`${f2(dilMNav)}×`:"—"}</div>
             {mNavDir!=="unknown"&&<span style={{fontSize:12,fontFamily:mono,color:mNavDir==="rising"?"#1D9E75":mNavDir==="falling"?"#E24B4A":"var(--t2)",fontWeight:600}}>
               {mNavDir==="rising"?"↑":mNavDir==="falling"?"↓":"→"}{mNavVel!=null?` ${mNavVel>=0?"+":""}${mNavVel.toFixed(3)}`:""}
             </span>}
@@ -1162,60 +1187,61 @@ function App(){
           {sparkPoints.length>1&&(()=>{
             const W=160,H=36,pad=3;
             const min=Math.min(...sparkPoints),max=Math.max(...sparkPoints),rng=max-min||0.001;
-            const pts=sparkPoints.map((v,i)=>[
-              pad+(i/(sparkPoints.length-1))*(W-pad*2),
-              pad+(1-((v-min)/rng))*(H-pad*2)
-            ]);
+            const pts=sparkPoints.map((v,i)=>[pad+(i/(sparkPoints.length-1))*(W-pad*2),pad+(1-((v-min)/rng))*(H-pad*2)]);
             const linePts=pts.map(([x,y])=>`${x},${y}`).join(" ");
             const areaPts=`${pts[0][0]},${H} `+pts.map(([x,y])=>`${x},${y}`).join(" ")+` ${pts[pts.length-1][0]},${H}`;
             const col=mNavDir==="rising"?"#1D9E75":mNavDir==="falling"?"#E24B4A":"#999";
-            const colFade=mNavDir==="rising"?"#1D9E7520":mNavDir==="falling"?"#E24B4A20":"#99999920";
             const uid=`sp${Math.random().toString(36).slice(2,7)}`;
             const last=pts[pts.length-1];
             return(
               <svg width={W} height={H} style={{display:"block",marginTop:6,overflow:"visible"}}>
-                <defs>
-                  <linearGradient id={uid} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={col} stopOpacity="0.25"/>
-                    <stop offset="100%" stopColor={col} stopOpacity="0.02"/>
-                  </linearGradient>
-                </defs>
-                {/* area fill */}
+                <defs><linearGradient id={uid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={col} stopOpacity="0.25"/><stop offset="100%" stopColor={col} stopOpacity="0.02"/></linearGradient></defs>
                 <polygon points={areaPts} fill={`url(#${uid})`}/>
-                {/* line */}
                 <polyline points={linePts} fill="none" stroke={col} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                {/* current value dot */}
                 <circle cx={last[0]} cy={last[1]} r="3" fill={col} stroke="var(--bg0)" strokeWidth="1.5"/>
-                {/* min/max reference lines */}
                 <line x1={pad} y1={pad} x2={W-pad} y2={pad} stroke="var(--bd1)" strokeWidth="0.5" strokeDasharray="2,3"/>
                 <line x1={pad} y1={H-pad} x2={W-pad} y2={H-pad} stroke="var(--bd1)" strokeWidth="0.5" strokeDasharray="2,3"/>
-                {/* min/max labels */}
                 <text x={W-1} y={pad+3} fontSize="7" fill="var(--t2)" textAnchor="end">{max.toFixed(2)}</text>
                 <text x={W-1} y={H-1} fontSize="7" fill="var(--t2)" textAnchor="end">{min.toFixed(2)}</text>
               </svg>
             );
           })()}
-          <div style={{...SUB,fontSize:12,marginTop:4,opacity:.7}}>mCap {fB(mktCap)} · NAV {fB(btcNavTot)}</div>
+          <div style={{...SUB,fontSize:11,marginTop:"auto",paddingTop:6,opacity:.65}}>mCap {fB(mktCap)} · NAV {fB(btcNavTot)}</div>
         </div>
-        <div style={CARD}>
-          <div style={LBL}>ATM accretion ratio</div>
+
+        {/* F2 · ISSUANCE — regime + accretion in one card (matches framework) */}
+        <div style={FCARD(rC[1])}>
+          <div style={FHDR}>
+            <span style={FTAG}>F2 · Issuance</span>
+            <span style={{...pill(rC[0],rC[2],rC[1],true)}}>{regime}</span>
+          </div>
           <div style={{...VAL,color:accrRatio!=null?(accrRatio>=1.05?"#0F6E56":accrRatio>=1?"#854F0B":"#791F1F"):"var(--t0)"}}>{accrRatio!=null?`${f2(accrRatio)}×`:"—"}</div>
           <div style={SUB}>{accrRatio!=null&&(accrRatio>=1.05?"accretive":accrRatio>=1?"marginal":"dilutive")} {accrRatio!=null&&"to BTC/share"}</div>
-          <div style={{...SUB,fontSize:10,marginTop:5,opacity:.7}}>{lastEvAccr!=null?`last ATM: ${f2(lastEvAccr)}× (vs live NAV)`:"—"}</div>
+          <div style={{...SUB,fontSize:11,marginTop:"auto",paddingTop:6,opacity:.65}}>
+            {daysSince!=null?`last common ${daysSince}d ago`:"no events"}{weeksActive>0?` · ${weeksActive}/4 wks · ${fB(total4w)}`:""}<br/>
+            {lastEvAccr!=null?`last ATM ${f2(lastEvAccr)}× vs live NAV`:""}
+          </div>
         </div>
-        <div style={CARD}>
-          <div style={LBL}>ATM regime</div>
-          <div style={{marginBottom:6}}><span style={{...pill(rC[0],rC[2],rC[1]),fontSize:14,padding:"4px 10px"}}>{regime}</span></div>
-          <div style={SUB}>{daysSince!=null?`last common: ${daysSince}d ago`:"no events"}</div>
-          <div style={{...SUB,fontSize:10,marginTop:4,opacity:.7}}>{weeksActive>0?`${weeksActive}/4 weeks · ${fB(total4w)}`:"dormant"}</div>
+
+        {/* F3 · BTC REGIME — trend status + override controls (moved here) */}
+        <div style={FCARD(tC[1])}>
+          <div style={FHDR}>
+            <span style={FTAG}>F3 · BTC Regime</span>
+            <span style={pill(tC[0],tC[1],"transparent",true)}>{tC[2]}</span>
+          </div>
+          <div style={{...VAL,fontSize:22,color:tC[1]}}>{trend==="uptrend"?"↑ Uptrend":trend==="downtrend"?"↓ Downtrend":trend==="range"?"→ Range":"? Building"}</div>
+          <div style={SUB}>BTC {btcP?`$${fK(Math.round(btcP))}`:"—"} <span style={{opacity:.6,fontSize:11}}>· 5d+10d+20d confirm for downtrend</span></div>
+          <div style={{display:"flex",alignItems:"center",gap:4,marginTop:"auto",paddingTop:8,flexWrap:"wrap"}}>
+            {["auto","uptrend","range","downtrend"].map(t=>{const on=btcTrendOverride===t;return<button key={t} onClick={()=>setSettings({btcTrendOverride:t})} style={{...BTN,fontSize:10,padding:"3px 8px",background:on?"var(--t0)":undefined,color:on?"var(--bg0)":undefined}}>{t==="auto"?`auto [${autoTrend}]`:t}</button>;})}
+          </div>
         </div>
       </div>
 
-      {/* ── OWNERSHIP FACTOR (always visible summary) ───────────────────────── */}
-      <div style={{...CARD,marginBottom:8,border:`1px solid ${ownershipCtx.bg==="var(--bg1)"?"var(--bd1)":"var(--bd1)"}`}}>
+      {/* F4 · OWNERSHIP — preserved logic, restyled to factor-card template */}
+      <div style={{...FCARD(ownershipCtx.color||"var(--bd2)"),marginBottom:8}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",cursor:"pointer"}} onClick={()=>setShowOwnership(v=>!v)}>
           <div style={{flex:1}}>
-            <div style={{...LBL,marginBottom:6}}>BTC ownership factor (factor 4)</div>
+            <div style={{...FTAG,marginBottom:6}}>F4 · OWNERSHIP <span style={{opacity:.55,letterSpacing:"0.04em",textTransform:"none"}}>· BTC supply share</span></div>
             <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
               {/* Key ownership metrics — always visible */}
               <div style={{fontFamily:mono,fontSize:12}}>
@@ -1326,154 +1352,109 @@ function App(){
         )}
       </div>
 
-      {/* ── Market Absorption + BTC/Share Trend row ──────────────────────────── */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-
-        {/* Absorption ratio */}
-        <div style={{...CARD,borderLeft:`3px solid ${absorptionCtx.color}`}}>
-          <div style={LBL}>market absorption ratio</div>
-          <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:4}}>
-            <div style={{fontSize:22,fontWeight:500,fontFamily:mono,color:absorptionCtx.color}}>
-              {absorptionCtx.ratio!=null?`${(absorptionCtx.ratio*100).toFixed(1)}%`:"—"}
-            </div>
-            <span style={pill(absorptionCtx.bg,absorptionCtx.color,"transparent",true)}>{absorptionCtx.label}</span>
-          </div>
-          <div style={{fontSize:12,fontFamily:mono,color:"var(--t2)",lineHeight:1.6}}>
-            {absorptionCtx.ratio!=null
-              ?`~${fK(Math.round(absorptionCtx.dailyAtm))} sh/day ATM vs ${mstrVol?fK(Math.round(mstrVol/1e6))+"M avg vol":"no vol data"}`
-              :mstrVol?"no ATM in last 30 days":"waiting for volume data"}
-          </div>
-          <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginTop:4,opacity:.7}}>
-            &lt;3% low · 3–8% moderate · 8–15% high · &gt;15% critical
-          </div>
-        </div>
-
-        {/* BTC/share trend */}
-        <div style={{...CARD,borderLeft:`3px solid ${btcPerShareTrend.trend==="rising"?"#1D9E75":btcPerShareTrend.trend==="falling"?"#E24B4A":"#888"}`}}>
-          <div style={LBL}>BTC / share trend (30D)</div>
-          <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:4}}>
-            <div style={{fontSize:22,fontWeight:500,fontFamily:mono,color:btcPerShareTrend.trend==="rising"?"#0F6E56":btcPerShareTrend.trend==="falling"?"#791F1F":"var(--t1)"}}>
-              {btcPerShareTrend.trend==="rising"?"↑ Rising":btcPerShareTrend.trend==="falling"?"↓ Falling":btcPerShareTrend.trend==="flat"?"→ Flat":"— No history"}
-            </div>
-          </div>
-          <div style={{fontSize:12,fontFamily:mono,color:"var(--t2)",lineHeight:1.6}}>
-            {btcPerShareTrend.pct30!=null
-              ?`${btcPerShareTrend.pct30>=0?"+":""}${(btcPerShareTrend.pct30*100).toFixed(3)}% over 30D · current ${f5(btcPerSh)} BTC/sh`
-              :"update BTC held to start tracking"}
-          </div>
-          {annualPreferredCost>0&&(
-            <div style={{fontSize:9,fontFamily:mono,color:"#854F0B",marginTop:4}}>
-              ⚠ preferred cost {fB(annualPreferredCost)}/yr — reduces common NAV accretion
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── STRC Preferred Flywheel Panel ────────────────────────────────────── */}
+      
+      {/* F5 · STRC FLYWHEEL — collapsed summary, expandable detail */}
       {(()=>{
         const PAR_C={
           stable:  {bg:"#E1F5EE",tx:"#085041",border:"#1D9E75",label:"stable"},
           watch:   {bg:"#EEF5FF",tx:"#1a4d8f",border:"#378ADD",label:"watch"},
           warning: {bg:"#FAEEDA",tx:"#633806",border:"#EF9F27",label:"warning ⚠"},
           critical:{bg:"#FCEBEB",tx:"#791F1F",border:"#E24B4A",label:"critical ✗"},
-          unknown: {bg:"var(--bg1)",tx:"var(--t2)",border:"var(--bd1)",label:"no data"},
+          unknown: {bg:"var(--bg1)",tx:"var(--t2)",border:"var(--bd2)",label:"no data"},
         };
-        const COV_C={
-          strong:  {c:"#0F6E56",label:"strong"},
-          adequate:{c:"#854F0B",label:"adequate"},
-          warning: {c:"#993C1D",label:"warning"},
-          critical:{c:"#791F1F",label:"critical"},
-          unknown: {c:"var(--t2)",label:"—"},
-        };
+        const COV_C={strong:{c:"#0F6E56",label:"strong"},adequate:{c:"#854F0B",label:"adequate"},warning:{c:"#993C1D",label:"warning"},critical:{c:"#791F1F",label:"critical"},unknown:{c:"var(--t2)",label:"—"}};
         const pc=PAR_C[strcMetrics.parStatus]||PAR_C.unknown;
         const cc=COV_C[strcMetrics.coverageStatus]||COV_C.unknown;
-        const sdot=({live:"#1D9E75",proxy:"#1D9E75",proxy2:"#1D9E75",manual:"#378ADD",cached:"#888",fetching:"#EF9F27",pending:"#aaa","no data — set manual":"#E24B4A"}[strcStatus])||"#aaa";
         return(
-          <div style={{...CARD,marginBottom:8,borderLeft:`3px solid ${pc.border}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{...LBL,marginBottom:0}}>STRC preferred flywheel</div>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:11,fontFamily:mono,color:"var(--t2)",display:"flex",alignItems:"center",gap:4}}>
-                  <span style={{width:6,height:6,borderRadius:"50%",background:sdot,display:"inline-block"}}/>
-                  {effStrc?`$${f2(effStrc)}`:"—"}
+          <div style={{...FCARD(pc.border),marginBottom:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",gap:8,flexWrap:"wrap"}} onClick={()=>setShowStrcDetail(v=>!v)}>
+              <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                <span style={FTAG}>F5 · STRC Flywheel <span style={{opacity:.55,letterSpacing:"0.04em",textTransform:"none"}}>· preferred financing health</span></span>
+                <span style={{fontSize:14,fontWeight:600,fontFamily:mono,color:"var(--t0)"}}>{effStrc?`$${f2(effStrc)}`:"—"}</span>
+                <span style={{fontSize:12,fontFamily:mono,color:strcMetrics.discount==null?"var(--t2)":strcMetrics.discount<-0.03?"#791F1F":strcMetrics.discount<-0.01?"#854F0B":"#0F6E56"}}>
+                  {strcMetrics.discount!=null?`${strcMetrics.discount>=0?"+":""}${(strcMetrics.discount*100).toFixed(2)}% vs par`:"vs $100 par"}
                 </span>
+                <span style={{fontSize:12,fontFamily:mono,color:cc.c}}>coverage {strcMetrics.coverageRatio!=null?`${strcMetrics.coverageRatio.toFixed(1)}×`:"—"}</span>
+                {strcMetrics.flywheelStress&&<span style={pill("#FAEEDA","#854F0B","transparent",true)}>⚠ stress</span>}
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{...pill(pc.bg,pc.tx,pc.border,true)}}>{pc.label}</span>
+                <span style={{fontSize:12,fontFamily:mono,color:"var(--t2)"}}>{showStrcDetail?"▾":"▸"}</span>
               </div>
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-
-              {/* Tile 1: Par discount/premium */}
-              <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
-                <div style={LBL}>vs $100 par</div>
-                <div style={{fontSize:20,fontWeight:600,fontFamily:mono,
-                  color:strcMetrics.discount==null?"var(--t2)":strcMetrics.discount<-0.03?"#791F1F":strcMetrics.discount<-0.01?"#854F0B":"#0F6E56"}}>
-                  {strcMetrics.discount!=null
-                    ?`${strcMetrics.discount>=0?"+":""}${(strcMetrics.discount*100).toFixed(2)}%`:"—"}
+            {showStrcDetail&&(
+              <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--bd1)"}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                  <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
+                    <div style={LBL}>vs $100 par</div>
+                    <div style={{fontSize:20,fontWeight:600,fontFamily:mono,color:strcMetrics.discount==null?"var(--t2)":strcMetrics.discount<-0.03?"#791F1F":strcMetrics.discount<-0.01?"#854F0B":"#0F6E56"}}>
+                      {strcMetrics.discount!=null?`${strcMetrics.discount>=0?"+":""}${(strcMetrics.discount*100).toFixed(2)}%`:"—"}
+                    </div>
+                    <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginTop:3,lineHeight:1.5}}>
+                      52w low $88 · high $100.42<br/>
+                      {strcMetrics.parStatus==="critical"?"⚠ flywheel impaired":strcMetrics.parStatus==="warning"?"ATM capacity reduced":strcMetrics.parStatus==="watch"?"monitor closely":strcMetrics.parStatus==="stable"?"ATM capacity intact":"set STRC price below"}
+                    </div>
+                  </div>
+                  <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
+                    <div style={LBL}>dividend coverage</div>
+                    <div style={{fontSize:20,fontWeight:600,fontFamily:mono,color:cc.c}}>{strcMetrics.coverageRatio!=null?`${strcMetrics.coverageRatio.toFixed(1)}×`:"—"}</div>
+                    <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginTop:3,lineHeight:1.5}}>
+                      {fB(strcMetrics.annualDividend)}/yr cost<br/>{fB(strcMetrics.totalFunding)}/yr funding ({cc.label})
+                    </div>
+                  </div>
+                  <div style={{background:strcMetrics.flywheelStress?"#FAEEDA":"var(--bg0)",borderRadius:7,padding:"8px 10px",border:`1px solid ${strcMetrics.flywheelStress?"#EF9F27":"var(--bd1)"}`}}>
+                    <div style={LBL}>flywheel stress</div>
+                    <div style={{fontSize:16,fontWeight:600,fontFamily:mono,color:strcMetrics.flywheelStress?"#854F0B":"#0F6E56",marginBottom:4}}>
+                      {strcMetrics.flywheelStress?"⚠ Detected":"✓ None"}
+                    </div>
+                    <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",lineHeight:1.5}}>
+                      {strcMetrics.flywheelStress?"STRC discount forming — capital rotating preferred over common":"STRC stable at par · issuance capacity intact"}
+                    </div>
+                  </div>
                 </div>
-                <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginTop:3,lineHeight:1.5}}>
-                  52w low: $88 · high: $100.42<br/>
-                  {strcMetrics.parStatus==="critical"?"⚠ flywheel impaired":
-                   strcMetrics.parStatus==="warning"?"ATM capacity reduced":
-                   strcMetrics.parStatus==="watch"?"monitor closely":
-                   strcMetrics.parStatus==="stable"?"ATM capacity intact":"set STRC price in ⚙"}
-                </div>
-              </div>
-
-              {/* Tile 2: Dividend coverage ratio */}
-              <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
-                <div style={LBL}>dividend coverage</div>
-                <div style={{fontSize:20,fontWeight:600,fontFamily:mono,color:cc.c}}>
-                  {strcMetrics.coverageRatio!=null?`${strcMetrics.coverageRatio.toFixed(1)}×`:"—"}
-                </div>
-                <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginTop:3,lineHeight:1.5}}>
-                  {fB(strcMetrics.annualDividend)}/yr cost<br/>
-                  {fB(strcMetrics.totalFunding)}/yr funding ({cc.label})
-                </div>
-              </div>
-
-              {/* Tile 3: Flywheel stress indicator */}
-              <div style={{background:strcMetrics.flywheelStress?"#FAEEDA":"var(--bg0)",
-                borderRadius:7,padding:"8px 10px",border:`1px solid ${strcMetrics.flywheelStress?"#EF9F27":"var(--bd1)"}`}}>
-                <div style={LBL}>flywheel stress</div>
-                <div style={{fontSize:16,fontWeight:600,fontFamily:mono,
-                  color:strcMetrics.flywheelStress?"#854F0B":"#0F6E56",marginBottom:4}}>
-                  {strcMetrics.flywheelStress?"⚠ Detected":"✓ None"}
-                </div>
-                <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",lineHeight:1.5}}>
-                  {strcMetrics.flywheelStress
-                    ?"STRC discount forming — capital rotating preferred over common"
-                    :"STRC stable at par · preferred issuance capacity intact"}
+                <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)"}}>STRC override:</div>
+                  <input style={{...INP,width:120,fontSize:11}} type="number" step="0.01" placeholder="blank = live fetch" value={strcManualPrice||""} onChange={e=>setSettings({strcManualPrice:Number(e.target.value)})}/>
+                  {strcManualPrice>0&&<button style={{...BTN,fontSize:10}} onClick={()=>setSettings({strcManualPrice:0})}>clear</button>}
+                  <div style={{fontSize:10,fontFamily:mono,color:"var(--t2)",marginLeft:4}}>NASDAQ: STRC · par $100 · {strcStatus}</div>
                 </div>
               </div>
-            </div>
-
-            {/* STRC price override input */}
-            <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
-              <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)"}}>STRC override:</div>
-              <input style={{...INP,width:120,fontSize:11}} type="number" step="0.01"
-                placeholder="blank = live fetch" value={strcManualPrice||""}
-                onChange={e=>setSettings({strcManualPrice:Number(e.target.value)})}/>
-              {strcManualPrice>0&&<button style={{...BTN,fontSize:10}} onClick={()=>setSettings({strcManualPrice:0})}>clear</button>}
-              <div style={{fontSize:10,fontFamily:mono,color:"var(--t2)",marginLeft:4}}>
-                NASDAQ: STRC · par $100 · {strcStatus}
-              </div>
-            </div>
+            )}
           </div>
         );
       })()}
+
+      {/* ── MODIFIERS — secondary inputs that can downgrade the signal ── */}
+      <div className="modifier-grid">
+        <div style={{...CARD,padding:"9px 13px",borderLeft:`3px solid ${absorptionCtx.color}`,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <span style={FTAG}>Absorption</span>
+          <span style={{fontSize:17,fontWeight:600,fontFamily:mono,color:absorptionCtx.color}}>{absorptionCtx.ratio!=null?`${(absorptionCtx.ratio*100).toFixed(1)}%`:"—"}</span>
+          <span style={pill(absorptionCtx.bg,absorptionCtx.color,"transparent",true)}>{absorptionCtx.label}</span>
+          <span style={{fontSize:10,fontFamily:mono,color:"var(--t2)",marginLeft:"auto"}}>
+            {absorptionCtx.ratio!=null?`~${fK(Math.round(absorptionCtx.dailyAtm))} sh/d ÷ ${mstrVol?fK(Math.round(mstrVol/1e6))+"M vol":"no vol"}`:mstrVol?"no ATM 30d":"awaiting vol"}
+          </span>
+        </div>
+        <div style={{...CARD,padding:"9px 13px",borderLeft:`3px solid ${btcPerShareTrend.trend==="rising"?"#1D9E75":btcPerShareTrend.trend==="falling"?"#E24B4A":"var(--bd2)"}`,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <span style={FTAG}>BTC / Share 30d</span>
+          <span style={{fontSize:17,fontWeight:600,fontFamily:mono,color:btcPerShareTrend.trend==="rising"?"#0F6E56":btcPerShareTrend.trend==="falling"?"#791F1F":"var(--t1)"}}>
+            {btcPerShareTrend.trend==="rising"?"↑":btcPerShareTrend.trend==="falling"?"↓":btcPerShareTrend.trend==="flat"?"→":"—"}
+            {btcPerShareTrend.pct30!=null?` ${btcPerShareTrend.pct30>=0?"+":""}${(btcPerShareTrend.pct30*100).toFixed(2)}%`:""}
+          </span>
+          <span style={{fontSize:10,fontFamily:mono,color:"var(--t2)",marginLeft:"auto"}}>
+            {f5(btcPerSh)} BTC/sh{annualPreferredCost>0?` · pref cost ${fB(annualPreferredCost)}/yr`:""}
+          </span>
+        </div>
+      </div>
+
+      {/* ══ MARKET ══ */}
+      <div style={SECHDR}><span style={SECHDR_T}>Market</span><span style={SECHDR_S}>live quotes · auto-refresh 2min</span></div>
 
       {/* ── Live data row ───────────────────────────────────────────────────── */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:8}}>
         {[{lbl:"MSTR",val:effMstr?`$${f2(effMstr)}`:"—",sub:mstrStatus},{lbl:"BTC",val:btcP?`$${fK(Math.round(btcP))}`:"—",sub:"coingecko"},{lbl:"BTC / dil. sh",val:f5(btcPerSh),sub:`${(btcHeld/1e3).toFixed(1)}k ÷ ${(dilutedShares/1e6).toFixed(1)}M`},{lbl:"BTC NAV / sh",val:navPerSh?`$${f2(navPerSh)}`:"—",sub:<span style={pill(tC[0],tC[1])}>{tC[2]}</span>}].map(({lbl,val,sub})=>(
           <div key={lbl} style={CARD}><div style={LBL}>{lbl}</div><div style={{...VAL,fontSize:22}}>{val}</div><div style={{...SUB,fontSize:10,marginTop:4}}>{sub}</div></div>
         ))}
-      </div>
-
-      {/* ── BTC trend ───────────────────────────────────────────────────────── */}
-      <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:10,flexWrap:"wrap"}}>
-        <span style={{...LBL,marginBottom:0,marginRight:3}}>BTC trend:</span>
-        {["auto","uptrend","range","downtrend"].map(t=>{const on=btcTrendOverride===t;return<button key={t} onClick={()=>setSettings({btcTrendOverride:t})} style={{...BTN,fontSize:10,padding:"3px 8px",background:on?"var(--t0)":undefined,color:on?"var(--bg0)":undefined}}>{t==="auto"?`auto [${autoTrend}]`:t}</button>;})}
       </div>
 
       {/* ── Pro-forma ───────────────────────────────────────────────────────── */}
@@ -1487,6 +1468,9 @@ function App(){
           </div>
         </div>
       )}
+
+      {/* ══ WORKSPACE ══ */}
+      <div style={SECHDR}><span style={SECHDR_T}>Workspace</span><span style={SECHDR_S}>calendar · sync · inputs · logs · trader tools</span></div>
 
       {/* ── Calendar ────────────────────────────────────────────────────────── */}
       <button style={{...BTN,marginBottom:6,width:"100%",textAlign:"left",padding:"8px 12px",fontSize:11}} onClick={()=>setShowCal(v=>!v)}>
