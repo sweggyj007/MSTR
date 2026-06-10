@@ -4,7 +4,7 @@
 
 > *Personal quant tool. Not financial advice. Always verify SEC filings before trading.*
 
-**[→ Live Demo](https://sweggyj007.github.io/MSTR/mstr-signal-engine.html)**
+**[→ Live Demo](https://sweggyj007.github.io/MSTR-Stock-Monitor/mstr-signal-engine.html)**
 
 ---
 
@@ -34,7 +34,7 @@ From Q1 2026, **STRC preferred stock became the dominant ATM vehicle** (~59% of 
 
 Plus two signal modifiers: **Market Absorption Ratio** and **BTC/Share Trend (30D)**.
 
-### Signal Decision Tree (V2 — backtest validated)
+### Signal Decision Tree (V3 — backtest validated)
 
 | Condition | Signal |
 |-----------|--------|
@@ -43,10 +43,13 @@ Plus two signal modifiers: **Market Absorption Ratio** and **BTC/Share Trend (30
 | mNAV < 1.00 · ATM Dormant/Light | **LONG MSTR** |
 | mNAV < 1.00 · ATM Active | **HOLD / MONITOR** |
 | mNAV 1.00–1.10 | **HOLD / MONITOR** |
-| mNAV 1.10–1.20 | **REDUCE / HEDGE** |
-| mNAV ≥ 1.20 · Dormant/Light regime | **REDUCE** (regime caps it) |
+| mNAV 1.10–1.20 · Active/Aggressive | **REDUCE — HIGH CONVICTION** |
+| mNAV 1.10–1.20 · Dormant/Light | **REDUCE / HEDGE** |
+| mNAV ≥ 2.0 · any regime | **SHORT** (extreme override — no regime justifies 2×+) |
+| mNAV 1.20–2.0 · Dormant/Light regime | **REDUCE** (regime caps it) |
 | mNAV 1.20–1.40 · Active regime | **REDUCE** |
 | mNAV ≥ 1.20 · Aggressive **or** mNAV ≥ 1.40 | **SHORT MSTR / LONG BTC** |
+| BTC confirmed uptrend · REDUCE/REDHI · mNAV < 1.60 | **HOLD** (momentum can expand premium — wait) |
 | Ownership expanding but BTC/share falling | **LONG BTC / REDUCE MSTR** |
 | STRC trading below $95 par | **HOLD** (flywheel impaired) |
 | Dividend coverage ratio < 1× | **HOLD** (sustainability risk) |
@@ -95,13 +98,20 @@ Plus two signal modifiers: **Market Absorption Ratio** and **BTC/Share Trend (30
 - Auto-check badge: background check runs daily, shows red badge when new filings exist
 - Deduplication — re-syncing never creates duplicate events
 
+### BTC Flow Monitoring
+- BTC holdings accept decreases — "never sell" is no longer assumed (Strategy began selective sales in 2026)
+- Every holdings change logged with delta, direction, and net-sale marker
+- 30-day net-sale flag: appears only when sales are detected, with conservative context classification (Technical/noise → Watch → Regime watch). Flag only — never alters the main signal. Principle: *sale is not the signal; sale context is the signal*
+
 ### Trader Tools
 - Position P&L tracker: live MSTR return, BTC return, alpha vs BTC, dollar P&L
 - Pair trade sizing calculator with regime-aware beta caveat
 
-### Calendar & UX
+### Layout & UX
+- Three-tier layout mirrors the framework itself: **Verdict → Factors (F1–F5 uniform cards) → Market → Workspace**
 - Earnings calendar with blackout window detection and signal annotation
-- Light/dark mode toggle (☀/🌙) with persisted preference
+- Light/dark mode toggle (☀/🌙) with persisted preference · responsive mobile layout
+- Error boundary + guarded browser APIs (no white-screen on older iOS Safari) · animated loading/failure states
 - Single HTML file — zero dependencies, no install, runs in any browser
 - Full localStorage persistence — all data survives across sessions
 
@@ -199,12 +209,17 @@ See [`TEST_RECORD.md`](TEST_RECORD.md) for full test documentation.
 
 | Signal | n | Avg alpha vs BTC | Hit rate |
 |--------|---|-----------------|----------|
-| SHORT | 10 | −9.2% | **90%** |
-| REDUCE | 12 | +4.0% | 58% |
+| SHORT (V3) | 13 | −15.8% | **92%** |
+| REDUCE (V3) | 7 | +18.5% | 43% — treat as directional lean, not high conviction |
 
-**Two threshold fixes applied after backtest:**
-1. SHORT requires Aggressive regime OR mNAV > 1.40 — Dormant/Light caps at REDUCE
-2. BTC downtrend requires 5d + 10d + 20d all negative — prevents single-period noise override
+**Threshold evolution (V1 → V3), each step backtest-driven:**
+1. SHORT requires Aggressive regime OR mNAV > 1.40 — Dormant/Light caps at REDUCE (V2)
+2. BTC downtrend requires 5d + 10d + 20d all negative — prevents single-period noise override (V2)
+3. mNAV ≥ 2.0 always SHORT — extreme premium override, regime irrelevant (V3)
+4. REDUCE split: HIGH CONVICTION (Active/Aggressive) vs standard (Dormant/Light) (V3)
+5. BTC uptrend + REDUCE + mNAV < 1.60 → HOLD — momentum rallies caused 3 of 12 V2 REDUCE misses (V3)
+
+The 2 remaining failures (Sep 2024, Apr 2026) are range-then-breakout cases — structurally irreducible without forward-looking BTC momentum data (deferred to roadmap).
 
 ---
 
@@ -224,8 +239,10 @@ See [`TEST_RECORD.md`](TEST_RECORD.md) for full test documentation.
 ```
 mstr-signal-engine/
 ├── mstr-signal-engine.html   # Main dashboard — open in browser
+├── index.html                # Redirect — root URL opens the dashboard
 ├── README.md                 # This file
-├── TEST_RECORD.md            # Full test documentation and backtest results
+├── TEST_RECORD.md            # Full test documentation and backtest results (V1→V3)
+├── DEVELOPMENT_LOG.md        # Living changelog, architecture decisions, roadmap
 ├── test_signal.py            # Python unit test suite (10 cases)
-└── backtest_results.csv      # Historical backtest data (22 snapshots)
+└── backtest_results.csv      # Historical backtest data (22 snapshots, V2 vs V3)
 ```
