@@ -4,7 +4,7 @@
 
 > *Personal quant tool. Not financial advice. Always verify SEC filings before trading.*
 
-**[→ Live Demo](https://sweggyj007.github.io/MSTR-Stock-Monitor/mstr-signal-engine.html)**
+**[→ Live Demo](https://sweggyj007.github.io/MSTR/mstr-signal-engine.html)**
 
 ---
 
