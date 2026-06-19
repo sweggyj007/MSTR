@@ -10,20 +10,12 @@
       --t0:#1a1a18; --t1:#5f5e5a; --t2:#8f8d89;
       --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
       --mono:'JetBrains Mono','Fira Mono','Cascadia Code','Consolas',monospace;
-    }
+      --c-red:var(--c-red); --c-redhi:var(--c-redhi); --c-orange:var(--c-orange); --c-amber:var(--c-amber); --c-brown:var(--c-brown); --c-rust:var(--c-rust); --c-green:var(--c-green); --c-green2:var(--c-green2); --c-blue:var(--c-blue); --c-purple:var(--c-purple);  --bg-amber:var(--bg-amber); --bg-red:var(--bg-red); --bg-green:var(--bg-green); --bg-orange:var(--bg-orange); --bg-blue:var(--bg-blue); --bg-purple:var(--bg-purple); --bg-redhi:var(--bg-redhi); --bg-blue2:var(--bg-blue2);}
     /* Dark theme — activated by [data-theme="dark"] on <html> */
     [data-theme="dark"] {
       --bg0:#181715; --bg1:#201f1c; --bd1:#302e29; --bd2:#403e39;
       --t0:#eeece7; --t1:#9e9c97; --t2:#686662;
-    }
-    [data-theme="dark"] .sig-long   { background:#0A2E1F!important; border-color:#22C97A!important; color:#4AE89A!important; }
-    [data-theme="dark"] .sig-hold   { background:#2E2008!important; border-color:#F5A623!important; color:#F5C842!important; }
-    [data-theme="dark"] .sig-reduce { background:#2E1008!important; border-color:#F06030!important; color:#F08060!important; }
-    [data-theme="dark"] .sig-redhi   { background:#3A0A00!important; border-color:#FF5520!important; color:#FF8060!important; }
-    [data-theme="dark"] .sig-short  { background:#2E0808!important; border-color:#FF4444!important; color:#FF8080!important; }
-    [data-theme="dark"] .sig-neut   { background:#222220!important; border-color:#888884!important; color:#BBBBAA!important; }
-    [data-theme="dark"] .sig-caut   { background:#16103A!important; border-color:#9B8FFF!important; color:#BDB5FF!important; }
-    [data-theme="dark"] .sig-btcov  { background:#2E2008!important; border-color:#F5A623!important; color:#F5C842!important; }
+      --c-red:#FF6B6B; --c-redhi:#FF7849; --c-orange:#F0875A; --c-amber:#F5C842; --c-brown:#E0A848; --c-rust:#F08060; --c-green:#3FD99A; --c-green2:#35C98D; --c-blue:#5BA8F0; --c-purple:#A99CFF;  --bg-amber:#3A2A0A; --bg-red:#3A1414; --bg-green:#0C2E22; --bg-orange:#3A1C10; --bg-blue:#0E2438; --bg-purple:#1E1A40; --bg-redhi:#3A1810; --bg-blue2:#0E2236;}
     /* Responsive factor grid — stacks on narrow screens */
     .factor-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:8px; }
     .modifier-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
@@ -32,7 +24,7 @@
       .modifier-grid { grid-template-columns:1fr; }
     }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-    body{background:var(--bg0);color:var(--t0);font-family:var(--sans);min-height:100vh;}
+    body{background:var(--bg0);color:"var(--t0)";font-family:var(--sans);min-height:100vh;}
     #root{max-width:760px;margin:0 auto;padding:20px 14px 40px;}
     input,select,button{font-family:inherit;outline:none;}
     input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{opacity:.4;}
@@ -225,11 +217,11 @@ function getOwnershipContext({ownershipMetrics,accrRatio,regime,mNav}){
 
   let signal="neutral",label="→ Neutral",color="#686662",bg="#F3F2EE";
   if(trend==="rising"&&isAccretive&&!isOvervalued){
-    signal="bullish";label="↑ Bullish — all four factors aligned";color="#085041";bg="#E1F5EE";
+    signal="bullish";label="↑ Bullish — all four factors aligned";color="var(--c-green)";bg="var(--bg-green)";
   } else if(trend==="rising"&&(!isAccretive||isAggressive)){
-    signal="btc_over_mstr";label="⇄ Prefer BTC over MSTR";color="#633806";bg="#FAEEDA";
+    signal="btc_over_mstr";label="⇄ Prefer BTC over MSTR";color="var(--c-brown)";bg="var(--bg-amber)";
   } else if(trend==="falling"){
-    signal="risk_off";label="↓ Risk-off — holdings declining";color="#791F1F";bg="#FCEBEB";
+    signal="risk_off";label="↓ Risk-off — holdings declining";color="var(--c-red)";bg="var(--bg-red)";
   } else if(trend==="stalled"&&!isOvervalued){
     signal="neutral";label="→ Ownership stalled";color="#686662";bg="#F3F2EE";
   }
@@ -294,13 +286,13 @@ function getBtcSaleFlag(btcHeldLog){
     cls="Technical / noise";color="#666";bg="#F1EFE8";
     note="small isolated sale · 30D net flow still positive · narrative flag only";
   }else if(netFlow<0||saleCount>=3){
-    cls="Regime watch";color="#791F1F";bg="#FCEBEB";
+    cls="Regime watch";color="var(--c-red)";bg="var(--bg-red)";
     note="net distribution over 30D or repeated sales · monitor for accumulation-narrative break";
   }else if(saleCount>=2){
-    cls="Watch";color="#854F0B";bg="#FAEEDA";
+    cls="Watch";color="var(--c-amber)";bg="var(--bg-amber)";
     note="repeated small sales · context inconclusive · monitor";
   }else{
-    cls="Isolated sale";color="#854F0B";bg="#FAEEDA";
+    cls="Isolated sale";color="var(--c-amber)";bg="var(--bg-amber)";
     note="single sale · 30D net flow positive · monitor use-of-proceeds in filings";
   }
   return{hasSale:true,totalSold,saleCount,maxPct,netFlow,cls,color,bg,note};
@@ -333,10 +325,10 @@ function getAbsorptionRatio(atmEvents, mstrVol){
   const dailyAtm=totalShares/tradingDays;
   const ratio=dailyAtm/mstrVol;
   let label,color,bg;
-  if(ratio<0.03){label="low — market can absorb";color="#085041";bg="#E1F5EE";}
-  else if(ratio<0.08){label="moderate — watch carefully";color="#633806";bg="#FAEEDA";}
-  else if(ratio<0.15){label="high — supply pressure";color="#4A1B0C";bg="#FAECE7";}
-  else{label="critical — ATM likely depressing price";color="#791F1F";bg="#FCEBEB";}
+  if(ratio<0.03){label="low — market can absorb";color="var(--c-green)";bg="var(--bg-green)";}
+  else if(ratio<0.08){label="moderate — watch carefully";color="var(--c-brown)";bg="var(--bg-amber)";}
+  else if(ratio<0.15){label="high — supply pressure";color="var(--c-rust)";bg="var(--bg-orange)";}
+  else{label="critical — ATM likely depressing price";color="var(--c-red)";bg="var(--bg-red)";}
   return{ratio,dailyAtm,label,color,bg};
 }
 
@@ -366,14 +358,14 @@ function logSignalChange(prevKey, newKey, context){
 
 // ── Main signal (4-factor) ────────────────────────────────────────────────────
 const SIG={
-  LONG:  {label:"LONG MSTR",              key:"LONG",  color:"#0F6E56",bg:"#E1F5EE",border:"#1D9E75"},
-  HOLD:  {label:"HOLD / MONITOR",          key:"HOLD",  color:"#854F0B",bg:"#FAEEDA",border:"#EF9F27"},
-  REDHI: {label:"REDUCE — HIGH CONVICTION",key:"REDHI", color:"#7A1F05",bg:"#FAE0DA",border:"#C93B15"},
-  REDUCE:{label:"REDUCE / HEDGE",          key:"REDUCE",color:"#993C1D",bg:"#FAECE7",border:"#D85A30"},
-  SHORT: {label:"SHORT MSTR / LONG BTC",  key:"SHORT", color:"#791F1F",bg:"#FCEBEB",border:"#E24B4A"},
-  NEUT:  {label:"NEUTRAL / AVOID",      key:"NEUT",  color:"#444441",bg:"#F1EFE8",border:"#B4B2A9"},
-  CAUT:  {label:"CAUTION",              key:"CAUT",  color:"#3C3489",bg:"#EEEDFE",border:"#7F77DD"},
-  BTCOV: {label:"LONG BTC / REDUCE MSTR",key:"BTCOV",color:"#633806",bg:"#FAEEDA",border:"#EF9F27"},
+  LONG:  {label:"LONG MSTR",              key:"LONG",  color:"var(--c-green2)",bg:"var(--bg-green)",border:"#1D9E75"},
+  HOLD:  {label:"HOLD / MONITOR",          key:"HOLD",  color:"var(--c-amber)",bg:"var(--bg-amber)",border:"#EF9F27"},
+  REDHI: {label:"REDUCE — HIGH CONVICTION",key:"REDHI", color:"var(--c-redhi)",bg:"var(--bg-redhi)",border:"#C93B15"},
+  REDUCE:{label:"REDUCE / HEDGE",          key:"REDUCE",color:"var(--c-orange)",bg:"var(--bg-orange)",border:"#D85A30"},
+  SHORT: {label:"SHORT MSTR / LONG BTC",  key:"SHORT", color:"var(--c-red)",bg:"var(--bg-red)",border:"#E24B4A"},
+  NEUT:  {label:"NEUTRAL / AVOID",      key:"NEUT",  color:"var(--t1)",bg:"var(--bg1)",border:"#B4B2A9"},
+  CAUT:  {label:"CAUTION",              key:"CAUT",  color:"var(--c-purple)",bg:"var(--bg-purple)",border:"#7F77DD"},
+  BTCOV: {label:"LONG BTC / REDUCE MSTR",key:"BTCOV",color:"var(--c-brown)",bg:"var(--bg-amber)",border:"#EF9F27"},
 };
 
 function getSignal({mNav,regime,trend,blackout,ownershipCtx,absorptionCtx,btcPerShareTrend,strcMetrics}){
@@ -782,10 +774,18 @@ function App(){
   },[ready,btcPrice,mstrPrice]);
 
   // ── Price fetching ──────────────────────────────────────────────────────────
+  // Timeout-aware fetch — aborts after `ms` so a slow proxy can't stall the chain
+  const fetchT=async(url,opts={},ms=4000)=>{
+    const ctrl=new AbortController();
+    const t=setTimeout(()=>ctrl.abort(),ms);
+    try{return await fetch(url,{...opts,signal:ctrl.signal});}
+    finally{clearTimeout(t);}
+  };
+
   const fetchBtc=useCallback(async()=>{
     setBtcStatus("fetching");
     try{
-      const r=await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
+      const r=await fetchT("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
       const d=await r.json();const p=d?.bitcoin?.usd;
       if(p){setBtcPrice(p);setBtcStatus("live");setBtcHist(prev=>{const u=[...prev,{ts:Date.now(),price:p}].slice(-600);sSet("mstr-v1-btcHist",u);return u;});}
     }catch{setBtcStatus("error");}
@@ -794,7 +794,7 @@ function App(){
   const fetchMstr=useCallback(async(manual)=>{
     if(manual){const p=parseFloat(manual);if(!isNaN(p)&&p>0){setMstrPrice(p);setMstrStatus("manual");}return;}
     const tryYF=async url=>{
-      const r=await fetch(url,{headers:{"Accept":"application/json"}});if(!r.ok)throw 0;
+      const r=await fetchT(url,{headers:{"Accept":"application/json"}});if(!r.ok)throw 0;
       const d=await r.json(),meta=d?.chart?.result?.[0]?.meta;if(!meta)throw 0;
       const st=meta.marketState;
       const p=st==="POST"&&meta.postMarketPrice?meta.postMarketPrice:st==="PRE"&&meta.preMarketPrice?meta.preMarketPrice:meta.regularMarketPrice;
@@ -808,17 +808,10 @@ function App(){
     try{const{p,vol,label}=await tryYF("https://corsproxy.io/?"+encodeURIComponent(YF));setMstrPrice(p);if(vol)setMstrVol(vol);setMstrStatus(label+" (proxy)");sSet("mstr-v1-lastPrice",p);return;}catch{}
     try{const{p,vol,label}=await tryYF("https://api.allorigins.win/raw?url="+encodeURIComponent(YF));setMstrPrice(p);if(vol)setMstrVol(vol);setMstrStatus(label+" (proxy2)");sSet("mstr-v1-lastPrice",p);return;}catch{}
     try{
-      const r=await fetch("https://stooq.com/q/l/?s=mstr.us&f=sd2t2ohlcv&h&e=csv");
+      const r=await fetchT("https://stooq.com/q/l/?s=mstr.us&f=sd2t2ohlcv&h&e=csv");
       const csv=await r.text(),cols=csv.trim().split("\n")[1]?.split(",");
       const p=cols?parseFloat(cols[6]):null;
       if(p&&p>10&&p<5000){setMstrPrice(p);setMstrStatus("stooq close");sSet("mstr-v1-lastPrice",p);return;}
-    }catch{}
-    try{
-      setMstrStatus("searching");
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,tools:[{type:"web_search_20250305",name:"web_search"}],system:"Return ONLY valid JSON.",messages:[{role:"user",content:'Current MSTR stock price. Return ONLY: {"price":<number>}'}]})});
-      const data=await res.json(),text=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
-      const jm=text.match(/"price"\s*:\s*([\d]+\.?[\d]*)/);const p=jm?parseFloat(jm[1]):null;
-      if(p&&p>10&&p<5000){setMstrPrice(p);setMstrStatus("claude live");sSet("mstr-v1-lastPrice",p);return;}
     }catch{}
     const last=await sGet("mstr-v1-lastPrice");
     if(last){setMstrPrice(last);setMstrStatus("cached");}else setMstrStatus("no price — use ⚙ override");
@@ -827,7 +820,7 @@ function App(){
   const fetchStrc=useCallback(async(manual)=>{
     if(manual&&manual>0){setStrcPrice(manual);setStrcStatus("manual");return;}
     const tryYF=async url=>{
-      const r=await fetch(url,{headers:{"Accept":"application/json"}});if(!r.ok)throw 0;
+      const r=await fetchT(url,{headers:{"Accept":"application/json"}});if(!r.ok)throw 0;
       const d=await r.json(),meta=d?.chart?.result?.[0]?.meta;if(!meta)throw 0;
       const p=meta.regularMarketPrice||meta.postMarketPrice||meta.preMarketPrice;
       if(!p||p<50||p>200)throw 0;
@@ -1038,14 +1031,14 @@ function App(){
   const BTN={fontSize:12,padding:"5px 10px",borderRadius:6,border:"1px solid var(--bd2)",background:"var(--bg0)",color:"var(--t1)",cursor:"pointer",fontFamily:mono};
   const INP={fontSize:13,padding:"6px 10px",borderRadius:6,border:"1px solid var(--bd2)",background:"var(--bg0)",color:"var(--t0)",fontFamily:mono,boxSizing:"border-box",width:"100%"};
   const GBTN={...BTN,background:"#1D9E75",color:"#fff",border:"none",padding:"6px 14px"};
-  const REGIME_C={Dormant:["#E1F5EE","#1D9E75","#085041"],Light:["#E6F1FB","#378ADD","#0C447C"],Active:["#FAEEDA","#EF9F27","#633806"],Aggressive:["#FAECE7","#D85A30","#4A1B0C"],Pending:["#EEEDFE","#7F77DD","#26215C"]};
-  const TREND_C={uptrend:["#E1F5EE","#085041","↑ uptrend"],range:["#FAEEDA","#633806","→ range"],downtrend:["#FAECE7","#4A1B0C","↓ downtrend"],insufficient:["#F3F2EE","#666","? accumulating"]};
+  const REGIME_C={Dormant:["var(--bg-green)","#1D9E75","var(--c-green)"],Light:["var(--bg-blue)","#378ADD","var(--c-blue)"],Active:["var(--bg-amber)","#EF9F27","var(--c-brown)"],Aggressive:["var(--bg-orange)","#D85A30","var(--c-rust)"],Pending:["var(--bg-purple)","#7F77DD","var(--c-purple)"]};
+  const TREND_C={uptrend:["var(--bg-green)","var(--c-green)","↑ uptrend"],range:["var(--bg-amber)","var(--c-brown)","→ range"],downtrend:["var(--bg-orange)","var(--c-rust)","↓ downtrend"],insufficient:["#F3F2EE","#666","? accumulating"]};
   const rC=REGIME_C[regime]||REGIME_C.Dormant,tC=TREND_C[trend]||TREND_C.insufficient;
   const pill=(bg,tx,border="transparent",sm=false)=>({background:bg,color:tx,border:`1px solid ${border}`,borderRadius:4,padding:sm?"2px 7px":"3px 9px",fontSize:sm?9:11,fontWeight:500,display:"inline-block",fontFamily:mono,letterSpacing:"0.04em"});
   const sdot=s=>({live:"#1D9E75","yahoo live":"#1D9E75","yahoo post-mkt":"#1D9E75","yahoo pre-mkt":"#1D9E75","yahoo live (proxy)":"#1D9E75","yahoo post-mkt (proxy)":"#1D9E75","yahoo pre-mkt (proxy)":"#1D9E75","yahoo live (proxy2)":"#1D9E75","stooq close":"#1D9E75","claude live":"#1D9E75",manual:"#378ADD",cached:"#888",fetching:"#EF9F27",searching:"#7F77DD",pending:"#aaa",error:"#E24B4A"}[s]||"#aaa");
 
-  const absorptionColor={low:"#085041",moderate:"#633806",high:"#4A1B0C",extreme:"#791F1F",unknown:"#666"}[ownershipMetrics.absorptionLevel]||"#666";
-  const absorptionBg={low:"#E1F5EE",moderate:"#FAEEDA",high:"#FAECE7",extreme:"#FCEBEB",unknown:"#F3F2EE"}[ownershipMetrics.absorptionLevel]||"#F3F2EE";
+  const absorptionColor={low:"var(--c-green)",moderate:"var(--c-brown)",high:"var(--c-rust)",extreme:"var(--c-red)",unknown:"#666"}[ownershipMetrics.absorptionLevel]||"#666";
+  const absorptionBg={low:"var(--bg-green)",moderate:"var(--bg-amber)",high:"var(--bg-orange)",extreme:"var(--bg-red)",unknown:"#F3F2EE"}[ownershipMetrics.absorptionLevel]||"#F3F2EE";
 
   const addEvent=()=>{
     if(!newEv.date||!newEv.shares||!newEv.proceeds)return;
@@ -1154,8 +1147,8 @@ function App(){
             <div style={{background:"#2E1A00",border:"1px solid #F5A623",borderRadius:6,padding:"5px 10px",fontSize:12,color:"#F5C842",marginBottom:8,fontFamily:mono}}>
               ⚠ Manual data may be stale — {[btcHeldStaleDays>10?`BTC held: ${btcHeldStaleDays}d`:"",dilSharesStaleDays>10?`shares: ${dilSharesStaleDays}d`:""].filter(Boolean).join(" · ")} · check SEC EDGAR
             </div>:null}
-          {sig.blackout&&<div style={{background:"#FFF8E6",border:"1px solid #F0C040",borderRadius:6,padding:"6px 10px",fontSize:10,color:"#7A5500",marginBottom:6,fontFamily:mono,lineHeight:1.6}}>⚠ Earnings blackout — ATM likely paused. Dormant regime reading may not reflect true intent.</div>}
-          {undeployedProceeds>0&&<div style={{background:"#EEEDFE",border:"1px solid #AFA9EC",borderRadius:6,padding:"6px 10px",fontSize:10,color:"#3C3489",fontFamily:mono,lineHeight:1.6}}>⚠ {fB(undeployedProceeds)} undeployed — reported metrics understated. See pro-forma below.</div>}
+          {sig.blackout&&<div style={{background:"#FFF8E6",border:"1px solid #F0C040",borderRadius:6,padding:"6px 10px",fontSize:10,color:"var(--c-amber)",marginBottom:6,fontFamily:mono,lineHeight:1.6}}>⚠ Earnings blackout — ATM likely paused. Dormant regime reading may not reflect true intent.</div>}
+          {undeployedProceeds>0&&<div style={{background:"var(--bg-purple)",border:"1px solid #AFA9EC",borderRadius:6,padding:"6px 10px",fontSize:10,color:"var(--c-purple)",fontFamily:mono,lineHeight:1.6}}>⚠ {fB(undeployedProceeds)} undeployed — reported metrics understated. See pro-forma below.</div>}
         </div>
       ):(
         <div style={{...CARD,textAlign:"center",padding:28,marginBottom:10}}>
@@ -1173,7 +1166,7 @@ function App(){
         <div style={FCARD(dilMNav!=null?(dilMNav<1?"#1D9E75":dilMNav<1.15?"#EF9F27":"#E24B4A"):"var(--bd2)")}>
           <div style={FHDR}>
             <span style={FTAG}>F1 · Valuation</span>
-            <span style={pill(dilMNav!=null&&dilMNav<1?"#E1F5EE":dilMNav!=null&&dilMNav<1.15?"#FAEEDA":"#FCEBEB",dilMNav!=null&&dilMNav<1?"#085041":dilMNav!=null&&dilMNav<1.15?"#633806":"#791F1F","transparent",true)}>
+            <span style={pill(dilMNav!=null&&dilMNav<1?"var(--bg-green)":dilMNav!=null&&dilMNav<1.15?"var(--bg-amber)":"var(--bg-red)",dilMNav!=null&&dilMNav<1?"var(--c-green)":dilMNav!=null&&dilMNav<1.15?"var(--c-brown)":"var(--c-red)","transparent",true)}>
               {dilMNav==null?"—":dilMNav<1?"discount":dilMNav<1.1?"fair":dilMNav<1.4?"elevated":dilMNav<2?"high":"extreme"}
             </span>
           </div>
@@ -1215,7 +1208,7 @@ function App(){
             <span style={FTAG}>F2 · Issuance</span>
             <span style={{...pill(rC[0],rC[2],rC[1],true)}}>{regime}</span>
           </div>
-          <div style={{...VAL,color:accrRatio!=null?(accrRatio>=1.05?"#0F6E56":accrRatio>=1?"#854F0B":"#791F1F"):"var(--t0)"}}>{accrRatio!=null?`${f2(accrRatio)}×`:"—"}</div>
+          <div style={{...VAL,color:accrRatio!=null?(accrRatio>=1.05?"var(--c-green2)":accrRatio>=1?"var(--c-amber)":"var(--c-red)"):"var(--t0)"}}>{accrRatio!=null?`${f2(accrRatio)}×`:"—"}</div>
           <div style={SUB}>{accrRatio!=null&&(accrRatio>=1.05?"accretive":accrRatio>=1?"marginal":"dilutive")} {accrRatio!=null&&"to BTC/share"}</div>
           <div style={{...SUB,fontSize:11,marginTop:"auto",paddingTop:6,opacity:.65}}>
             {daysSince!=null?`last common ${daysSince}d ago`:"no events"}{weeksActive>0?` · ${weeksActive}/4 wks · ${fB(total4w)}`:""}<br/>
@@ -1254,12 +1247,12 @@ function App(){
               </div>
               <div style={{fontFamily:mono,fontSize:12}}>
                 <span style={{color:"var(--t2)",fontSize:10}}>% exch. equiv: </span>
-                <span style={{color:ownershipMetrics.pctExch>0.2?"#791F1F":"var(--t0)",fontWeight:500}}>{fPct(ownershipMetrics.pctExch,1)}</span>
+                <span style={{color:ownershipMetrics.pctExch>0.2?"var(--c-red)":"var(--t0)",fontWeight:500}}>{fPct(ownershipMetrics.pctExch,1)}</span>
               </div>
               {ownershipMetrics.delta30!=null&&(
                 <div style={{fontFamily:mono,fontSize:12}}>
                   <span style={{color:"var(--t2)",fontSize:10}}>30D Δ: </span>
-                  <span style={{color:ownershipMetrics.delta30>0?"#0F6E56":ownershipMetrics.delta30<0?"#791F1F":"var(--t0)",fontWeight:500}}>{ownershipMetrics.delta30>0?"+":""}{fK(Math.round(ownershipMetrics.delta30))} BTC</span>
+                  <span style={{color:ownershipMetrics.delta30>0?"var(--c-green2)":ownershipMetrics.delta30<0?"var(--c-red)":"var(--t0)",fontWeight:500}}>{ownershipMetrics.delta30>0?"+":""}{fK(Math.round(ownershipMetrics.delta30))} BTC</span>
                 </div>
               )}
               {ownershipMetrics.accum30xIssuance!=null&&(
@@ -1315,7 +1308,7 @@ function App(){
               </div>
               <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
                 <div style={{...LBL,fontSize:10,marginBottom:3}}>30D accumulation vs monthly issuance</div>
-                <div style={{fontSize:16,fontWeight:500,fontFamily:mono,color:ownershipMetrics.delta30!=null?(ownershipMetrics.delta30>0?"#0F6E56":ownershipMetrics.delta30<0?"#791F1F":"var(--t0)"):"var(--t0)"}}>
+                <div style={{fontSize:16,fontWeight:500,fontFamily:mono,color:ownershipMetrics.delta30!=null?(ownershipMetrics.delta30>0?"var(--c-green2)":ownershipMetrics.delta30<0?"var(--c-red)":"var(--t0)"):"var(--t0)"}}>
                   {ownershipMetrics.delta30!=null?(ownershipMetrics.delta30>=0?"+":"")+fK(Math.round(ownershipMetrics.delta30))+" BTC":"insufficient history"}
                 </div>
                 <div style={{fontSize:11,fontFamily:mono,color:"var(--t1)",marginTop:2}}>
@@ -1327,7 +1320,7 @@ function App(){
 
             {/* Absorption threshold guide */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>
-              {[["< 1×","weak float impact","#E1F5EE","#085041"],["1–5×","meaningful","#FAEEDA","#633806"],["5–20×","high absorption","#FAECE7","#4A1B0C"],["> 20×","float squeeze risk","#FCEBEB","#791F1F"]].map(([v,d,bg,tx])=>(
+              {[["< 1×","weak float impact","var(--bg-green)","var(--c-green)"],["1–5×","meaningful","var(--bg-amber)","var(--c-brown)"],["5–20×","high absorption","var(--bg-orange)","var(--c-rust)"],["> 20×","float squeeze risk","var(--bg-red)","var(--c-red)"]].map(([v,d,bg,tx])=>(
                 <div key={v} style={{background:bg,borderRadius:5,padding:"5px 8px"}}>
                   <div style={{fontSize:10,fontWeight:600,fontFamily:mono,color:tx}}>{v}</div>
                   <div style={{fontSize:9,fontFamily:mono,color:tx,opacity:.75,marginTop:1}}>{d}</div>
@@ -1356,13 +1349,13 @@ function App(){
       {/* F5 · STRC FLYWHEEL — collapsed summary, expandable detail */}
       {(()=>{
         const PAR_C={
-          stable:  {bg:"#E1F5EE",tx:"#085041",border:"#1D9E75",label:"stable"},
-          watch:   {bg:"#EEF5FF",tx:"#1a4d8f",border:"#378ADD",label:"watch"},
-          warning: {bg:"#FAEEDA",tx:"#633806",border:"#EF9F27",label:"warning ⚠"},
-          critical:{bg:"#FCEBEB",tx:"#791F1F",border:"#E24B4A",label:"critical ✗"},
+          stable:  {bg:"var(--bg-green)",tx:"var(--c-green)",border:"#1D9E75",label:"stable"},
+          watch:   {bg:"var(--bg-blue2)",tx:"#1a4d8f",border:"#378ADD",label:"watch"},
+          warning: {bg:"var(--bg-amber)",tx:"var(--c-brown)",border:"#EF9F27",label:"warning ⚠"},
+          critical:{bg:"var(--bg-red)",tx:"var(--c-red)",border:"#E24B4A",label:"critical ✗"},
           unknown: {bg:"var(--bg1)",tx:"var(--t2)",border:"var(--bd2)",label:"no data"},
         };
-        const COV_C={strong:{c:"#0F6E56",label:"strong"},adequate:{c:"#854F0B",label:"adequate"},warning:{c:"#993C1D",label:"warning"},critical:{c:"#791F1F",label:"critical"},unknown:{c:"var(--t2)",label:"—"}};
+        const COV_C={strong:{c:"var(--c-green2)",label:"strong"},adequate:{c:"var(--c-amber)",label:"adequate"},warning:{c:"var(--c-orange)",label:"warning"},critical:{c:"var(--c-red)",label:"critical"},unknown:{c:"var(--t2)",label:"—"}};
         const pc=PAR_C[strcMetrics.parStatus]||PAR_C.unknown;
         const cc=COV_C[strcMetrics.coverageStatus]||COV_C.unknown;
         return(
@@ -1371,11 +1364,11 @@ function App(){
               <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                 <span style={FTAG}>F5 · STRC Flywheel <span style={{opacity:.55,letterSpacing:"0.04em",textTransform:"none"}}>· preferred financing health</span></span>
                 <span style={{fontSize:14,fontWeight:600,fontFamily:mono,color:"var(--t0)"}}>{effStrc?`$${f2(effStrc)}`:"—"}</span>
-                <span style={{fontSize:12,fontFamily:mono,color:strcMetrics.discount==null?"var(--t2)":strcMetrics.discount<-0.03?"#791F1F":strcMetrics.discount<-0.01?"#854F0B":"#0F6E56"}}>
+                <span style={{fontSize:12,fontFamily:mono,color:strcMetrics.discount==null?"var(--t2)":strcMetrics.discount<-0.03?"var(--c-red)":strcMetrics.discount<-0.01?"var(--c-amber)":"var(--c-green2)"}}>
                   {strcMetrics.discount!=null?`${strcMetrics.discount>=0?"+":""}${(strcMetrics.discount*100).toFixed(2)}% vs par`:"vs $100 par"}
                 </span>
                 <span style={{fontSize:12,fontFamily:mono,color:cc.c}}>coverage {strcMetrics.coverageRatio!=null?`${strcMetrics.coverageRatio.toFixed(1)}×`:"—"}</span>
-                {strcMetrics.flywheelStress&&<span style={pill("#FAEEDA","#854F0B","transparent",true)}>⚠ stress</span>}
+                {strcMetrics.flywheelStress&&<span style={pill("var(--bg-amber)","var(--c-amber)","transparent",true)}>⚠ stress</span>}
               </div>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{...pill(pc.bg,pc.tx,pc.border,true)}}>{pc.label}</span>
@@ -1388,7 +1381,7 @@ function App(){
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
                   <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
                     <div style={LBL}>vs $100 par</div>
-                    <div style={{fontSize:20,fontWeight:600,fontFamily:mono,color:strcMetrics.discount==null?"var(--t2)":strcMetrics.discount<-0.03?"#791F1F":strcMetrics.discount<-0.01?"#854F0B":"#0F6E56"}}>
+                    <div style={{fontSize:20,fontWeight:600,fontFamily:mono,color:strcMetrics.discount==null?"var(--t2)":strcMetrics.discount<-0.03?"var(--c-red)":strcMetrics.discount<-0.01?"var(--c-amber)":"var(--c-green2)"}}>
                       {strcMetrics.discount!=null?`${strcMetrics.discount>=0?"+":""}${(strcMetrics.discount*100).toFixed(2)}%`:"—"}
                     </div>
                     <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",marginTop:3,lineHeight:1.5}}>
@@ -1403,9 +1396,9 @@ function App(){
                       {fB(strcMetrics.annualDividend)}/yr cost<br/>{fB(strcMetrics.totalFunding)}/yr funding ({cc.label})
                     </div>
                   </div>
-                  <div style={{background:strcMetrics.flywheelStress?"#FAEEDA":"var(--bg0)",borderRadius:7,padding:"8px 10px",border:`1px solid ${strcMetrics.flywheelStress?"#EF9F27":"var(--bd1)"}`}}>
+                  <div style={{background:strcMetrics.flywheelStress?"var(--bg-amber)":"var(--bg0)",borderRadius:7,padding:"8px 10px",border:`1px solid ${strcMetrics.flywheelStress?"#EF9F27":"var(--bd1)"}`}}>
                     <div style={LBL}>flywheel stress</div>
-                    <div style={{fontSize:16,fontWeight:600,fontFamily:mono,color:strcMetrics.flywheelStress?"#854F0B":"#0F6E56",marginBottom:4}}>
+                    <div style={{fontSize:16,fontWeight:600,fontFamily:mono,color:strcMetrics.flywheelStress?"var(--c-amber)":"var(--c-green2)",marginBottom:4}}>
                       {strcMetrics.flywheelStress?"⚠ Detected":"✓ None"}
                     </div>
                     <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)",lineHeight:1.5}}>
@@ -1437,7 +1430,7 @@ function App(){
         </div>
         <div style={{...CARD,padding:"9px 13px",borderLeft:`3px solid ${btcPerShareTrend.trend==="rising"?"#1D9E75":btcPerShareTrend.trend==="falling"?"#E24B4A":"var(--bd2)"}`,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
           <span style={FTAG}>BTC / Share 30d</span>
-          <span style={{fontSize:17,fontWeight:600,fontFamily:mono,color:btcPerShareTrend.trend==="rising"?"#0F6E56":btcPerShareTrend.trend==="falling"?"#791F1F":"var(--t1)"}}>
+          <span style={{fontSize:17,fontWeight:600,fontFamily:mono,color:btcPerShareTrend.trend==="rising"?"var(--c-green2)":btcPerShareTrend.trend==="falling"?"var(--c-red)":"var(--t1)"}}>
             {btcPerShareTrend.trend==="rising"?"↑":btcPerShareTrend.trend==="falling"?"↓":btcPerShareTrend.trend==="flat"?"→":"—"}
             {btcPerShareTrend.pct30!=null?` ${btcPerShareTrend.pct30>=0?"+":""}${(btcPerShareTrend.pct30*100).toFixed(2)}%`:""}
           </span>
@@ -1459,11 +1452,11 @@ function App(){
 
       {/* ── Pro-forma ───────────────────────────────────────────────────────── */}
       {undeployedProceeds>0&&(
-        <div style={{background:"#EEEDFE",border:"1px solid #AFA9EC",borderRadius:10,padding:"12px 14px",marginBottom:8}}>
-          <div style={{...LBL,color:"#534AB7",marginBottom:8}}>pro-forma — {fB(undeployedProceeds)} undeployed @ ${fK(Math.round(buyPx))}/BTC</div>
+        <div style={{background:"var(--bg-purple)",border:"1px solid #AFA9EC",borderRadius:10,padding:"12px 14px",marginBottom:8}}>
+          <div style={{...LBL,color:"var(--c-purple)",marginBottom:8}}>pro-forma — {fB(undeployedProceeds)} undeployed @ ${fK(Math.round(buyPx))}/BTC</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
             {[{l:"Reported BTC/sh",v:f5(btcPerSh),s:`NAV $${f2(navPerSh)}`},{l:"Pro-forma BTC/sh",v:f5(pfBtcPerSh),s:`NAV $${f2(pfNavPerSh)}`},{l:"Pro-forma mNAV",v:pfMNav!=null?`${f2(pfMNav)}×`:"—",s:`reported ${dilMNav!=null?f2(dilMNav)+"×":"—"}`}].map(({l,v,s})=>(
-              <div key={l}><div style={{...LBL,color:"#534AB7"}}>{l}</div><div style={{fontSize:16,fontWeight:500,fontFamily:mono,color:"#26215C"}}>{v}</div><div style={{fontSize:10,color:"#534AB7",fontFamily:mono,marginTop:2}}>{s}</div></div>
+              <div key={l}><div style={{...LBL,color:"var(--c-purple)"}}>{l}</div><div style={{fontSize:16,fontWeight:500,fontFamily:mono,color:"var(--c-purple)"}}>{v}</div><div style={{fontSize:10,color:"var(--c-purple)",fontFamily:mono,marginTop:2}}>{s}</div></div>
             ))}
           </div>
         </div>
@@ -1475,7 +1468,7 @@ function App(){
       {/* ── Calendar ────────────────────────────────────────────────────────── */}
       <button style={{...BTN,marginBottom:6,width:"100%",textAlign:"left",padding:"8px 12px",fontSize:11}} onClick={()=>setShowCal(v=>!v)}>
         {showCal?"▾":"▸"} earnings calendar
-        {ne&&(()=>{const{daysTo,inBlackout}=calSt(ne.date);return<span style={{marginLeft:8,fontSize:10,fontFamily:mono,color:inBlackout?"#993C1D":daysTo<=30?"#854F0B":"var(--t2)"}}>{inBlackout?`⚠ BLACKOUT · ${ne.label} in ${daysTo}d`:daysTo>0?`${ne.label} in ${daysTo}d`:""}</span>})()}
+        {ne&&(()=>{const{daysTo,inBlackout}=calSt(ne.date);return<span style={{marginLeft:8,fontSize:10,fontFamily:mono,color:inBlackout?"var(--c-orange)":daysTo<=30?"var(--c-amber)":"var(--t2)"}}>{inBlackout?`⚠ BLACKOUT · ${ne.label} in ${daysTo}d`:daysTo>0?`${ne.label} in ${daysTo}d`:""}</span>})()}
       </button>
       {showCal&&(
         <div style={{...CARD,marginBottom:8}}>
@@ -1483,11 +1476,11 @@ function App(){
             {EARNINGS.map(ev=>{
               const{daysTo,inBlackout,isPast}=calSt(ev.date);
               const bStart=new Date(new Date(ev.date).getTime()-BLACKOUT_DAYS*86400000).toISOString().slice(0,10);
-              const badge=isPast?<span style={pill("#F1EFE8","#888","transparent",true)}>past</span>:inBlackout?<span style={pill("#FAECE7","#993C1D","#D85A30",true)}>⚠ BLACKOUT NOW</span>:daysTo<=30?<span style={pill("#FAEEDA","#854F0B","#EF9F27",true)}>{daysTo}d away</span>:<span style={pill("#F3F2EE","#666","transparent",true)}>{daysTo}d</span>;
+              const badge=isPast?<span style={pill("#F1EFE8","#888","transparent",true)}>past</span>:inBlackout?<span style={pill("var(--bg-orange)","var(--c-orange)","#D85A30",true)}>⚠ BLACKOUT NOW</span>:daysTo<=30?<span style={pill("var(--bg-amber)","var(--c-amber)","#EF9F27",true)}>{daysTo}d away</span>:<span style={pill("#F3F2EE","#666","transparent",true)}>{daysTo}d</span>;
               return(
                 <div key={ev.date} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:"var(--bg0)",borderRadius:7,border:"1px solid var(--bd1)"}}>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:12,fontFamily:mono,color:isPast?"var(--t2)":inBlackout?"#993C1D":daysTo<=30?"#854F0B":"var(--t0)",fontWeight:500}}>{ev.label}{!ev.confirmed?" (est.)":""}</div>
+                    <div style={{fontSize:12,fontFamily:mono,color:isPast?"var(--t2)":inBlackout?"var(--c-orange)":daysTo<=30?"var(--c-amber)":"var(--t0)",fontWeight:500}}>{ev.label}{!ev.confirmed?" (est.)":""}</div>
                     <div style={{fontSize:12,fontFamily:mono,color:"var(--t2)",marginTop:2}}>{ev.date} · blackout from {bStart}</div>
                   </div>
                   {badge}
@@ -1536,7 +1529,7 @@ function App(){
                           {syncResult.events.map((ev,i)=>(
                             <tr key={i} style={{borderBottom:"1px solid var(--bd1)"}}>
                               <td style={{padding:"4px 8px",fontFamily:mono,fontSize:11}}>{ev.date}</td>
-                              <td style={{padding:"4px 8px"}}><span style={{background:ev.type==="common"?"#E6F1FB":"#EEEDFE",color:ev.type==="common"?"#0C447C":"#26215C",borderRadius:3,padding:"1px 6px",fontSize:9}}>{ev.type==="preferred"?"STRC/pref":ev.type}</span></td>
+                              <td style={{padding:"4px 8px"}}><span style={{background:ev.type==="common"?"var(--bg-blue)":"var(--bg-purple)",color:ev.type==="common"?"var(--c-blue)":"var(--c-purple)",borderRadius:3,padding:"1px 6px",fontSize:9}}>{ev.type==="preferred"?"STRC/pref":ev.type}</span></td>
                               <td style={{padding:"4px 8px",fontFamily:mono,fontSize:11}}>{(ev.shares/1e6).toFixed(2)}M</td>
                               <td style={{padding:"4px 8px",fontFamily:mono,fontSize:11}}>{fB(ev.proceeds)}</td>
                               <td style={{padding:"4px 8px",fontFamily:mono,fontSize:11}}>${f2(ev.avgPrice)}</td>
@@ -1612,11 +1605,11 @@ function App(){
                   return(
                     <tr key={ev.id} style={{borderBottom:"1px solid var(--bd1)",background:ev.id===latestCommon?.id?"rgba(100,100,200,0.05)":undefined}}>
                       <td style={{padding:"6px 8px",color:"var(--t0)"}}>{ev.date}</td>
-                      <td style={{padding:"6px 8px"}}><span style={pill(ev.type==="common"?"#E6F1FB":"#EEEDFE",ev.type==="common"?"#0C447C":"#26215C","transparent",true)}>{ev.type}</span></td>
+                      <td style={{padding:"6px 8px"}}><span style={pill(ev.type==="common"?"var(--bg-blue)":"var(--bg-purple)",ev.type==="common"?"var(--c-blue)":"var(--c-purple)","transparent",true)}>{ev.type}</span></td>
                       <td style={{padding:"6px 8px",color:"var(--t1)"}}>{(ev.shares/1e6).toFixed(2)}M</td>
                       <td style={{padding:"6px 8px",color:"var(--t1)"}}>{fB(ev.proceeds)}</td>
                       <td style={{padding:"6px 8px",color:"var(--t0)"}}>${f2(ev.avgPrice)}</td>
-                      <td style={{padding:"6px 8px"}}>{ac!=null?<span style={{color:ac>=1.05?"#0F6E56":ac>=1?"#854F0B":"#791F1F",fontWeight:600}}>{f2(ac)}× {ac>=1.05?"↑":ac>=1?"~":"↓"}</span>:"—"}</td>
+                      <td style={{padding:"6px 8px"}}>{ac!=null?<span style={{color:ac>=1.05?"var(--c-green2)":ac>=1?"var(--c-amber)":"var(--c-red)",fontWeight:600}}>{f2(ac)}× {ac>=1.05?"↑":ac>=1?"~":"↓"}</span>:"—"}</td>
                     </tr>
                   );
                 })}
@@ -1666,9 +1659,9 @@ function App(){
                   <div style={{background:"var(--bg0)",borderRadius:7,padding:"8px 10px",border:"1px solid var(--bd1)"}}>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                       {[
-                        {l:"MSTR return",v:mstrRet!=null?`${mstrRet>=0?"+":""}${(mstrRet*100).toFixed(1)}%`:"—",c:mstrRet!=null?(mstrRet>0?"#0F6E56":"#E24B4A"):"var(--t1)"},
-                        {l:"BTC return", v:btcRet!=null?`${btcRet>=0?"+":""}${(btcRet*100).toFixed(1)}%`:"—",  c:btcRet!=null?(btcRet>0?"#0F6E56":"#E24B4A"):"var(--t1)"},
-                        {l:"Alpha vs BTC",v:alpha!=null?`${alpha>=0?"+":""}${(alpha*100).toFixed(1)}%`:"—",    c:alpha!=null?(alpha>0?"#0F6E56":"#E24B4A"):"var(--t1)"},
+                        {l:"MSTR return",v:mstrRet!=null?`${mstrRet>=0?"+":""}${(mstrRet*100).toFixed(1)}%`:"—",c:mstrRet!=null?(mstrRet>0?"var(--c-green2)":"#E24B4A"):"var(--t1)"},
+                        {l:"BTC return", v:btcRet!=null?`${btcRet>=0?"+":""}${(btcRet*100).toFixed(1)}%`:"—",  c:btcRet!=null?(btcRet>0?"var(--c-green2)":"#E24B4A"):"var(--t1)"},
+                        {l:"Alpha vs BTC",v:alpha!=null?`${alpha>=0?"+":""}${(alpha*100).toFixed(1)}%`:"—",    c:alpha!=null?(alpha>0?"var(--c-green2)":"#E24B4A"):"var(--t1)"},
                       ].map(({l,v,c:col})=>(
                         <div key={l}>
                           <div style={{...LBL,fontSize:10}}>{l}</div>
@@ -1676,7 +1669,7 @@ function App(){
                         </div>
                       ))}
                     </div>
-                    {pnlUsd!=null&&<div style={{fontSize:12,fontFamily:mono,color:pnlUsd>0?"#0F6E56":"#E24B4A",marginTop:6}}>
+                    {pnlUsd!=null&&<div style={{fontSize:12,fontFamily:mono,color:pnlUsd>0?"var(--c-green2)":"#E24B4A",marginTop:6}}>
                       P&L: {pnlUsd>=0?"+":""}{fB(Math.abs(pnlUsd))} on ${fK(positionSizeUsd)} position
                     </div>}
                   </div>
@@ -1708,7 +1701,7 @@ function App(){
                         <div style={{fontSize:11,fontFamily:mono,color:"var(--t2)"}}>${fK(Math.round(btcP))}/BTC</div>
                       </div>
                     </div>
-                    <div style={{fontSize:11,fontFamily:mono,color:"#854F0B",lineHeight:1.6,borderTop:"1px solid var(--bd1)",paddingTop:6}}>
+                    <div style={{fontSize:11,fontFamily:mono,color:"var(--c-amber)",lineHeight:1.6,borderTop:"1px solid var(--bd1)",paddingTop:6}}>
                       ⚠ Equal-dollar assumes beta=1. MSTR beta to BTC is regime-dependent —{" "}
                       {regime==="Dormant"?"Dormant: beta elevated (~1.5–2×), consider sizing MSTR leg smaller.":
                        regime==="Aggressive"?"Aggressive: beta compressed (~0.5–1×), consider sizing MSTR leg larger.":
